@@ -1,0 +1,27 @@
+# Dependencies
+/node_modules
+
+# Environment files
+.env
+.env.local
+
+# Compiled output
+/dist
+/build
+/out
+
+# TypeScript cache
+.tsbuildinfo
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# OS and Editor files
+.DS_Store
+Thumbs.db
+.vscode

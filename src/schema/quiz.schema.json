@@ -1,0 +1,395 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://sphinx.dev/quiz.schema.json",
+  "title": "Sphinx Quiz Schema",
+  "description": "JSON Schema for Sphinx quiz definitions",
+  "type": "object",
+  "required": ["version", "metadata", "config", "questions"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Reference to the JSON Schema"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+$",
+      "description": "Schema version (e.g., '1.0')"
+    },
+    "metadata": {
+      "$ref": "#/definitions/metadata"
+    },
+    "config": {
+      "$ref": "#/definitions/config"
+    },
+    "results": {
+      "$ref": "#/definitions/results"
+    },
+    "adaptive": {
+      "$ref": "#/definitions/adaptive"
+    },
+    "questions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/question"
+      },
+      "description": "Array of quiz questions"
+    }
+  },
+  "definitions": {
+    "metadata": {
+      "type": "object",
+      "required": ["id", "title"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$",
+          "description": "Unique identifier for the quiz"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Display title for the quiz"
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed description of the quiz purpose"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Tags for categorization"
+        },
+        "author": {
+          "type": "string",
+          "description": "Quiz author or team"
+        }
+      }
+    },
+    "config": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["static", "adaptive"],
+          "default": "static",
+          "description": "Quiz mode: static (fixed order) or adaptive (IRT-based)"
+        },
+        "questionTypes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["multiple-choice", "multi-select", "free-text", "code-challenge"]
+          },
+          "description": "Allowed question types in this quiz"
+        },
+        "questionCount": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Number of questions to present (for static mode or adaptive max)"
+        },
+        "passingThreshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.7,
+          "description": "Score required to pass (0.0 - 1.0)"
+        },
+        "timeLimit": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "Time limit in seconds (null for no limit)"
+        },
+        "randomizeOrder": {
+          "type": "boolean",
+          "default": false,
+          "description": "Randomize question order"
+        },
+        "showCorrectAnswers": {
+          "type": "string",
+          "enum": ["never", "after-each", "after-completion"],
+          "default": "after-completion",
+          "description": "When to reveal correct answers"
+        }
+      }
+    },
+    "results": {
+      "type": "object",
+      "properties": {
+        "persistence": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["display", "file", "webhook"]
+          },
+          "default": ["display"],
+          "description": "How to persist results"
+        },
+        "filePath": {
+          "type": "string",
+          "description": "Directory path for file output"
+        },
+        "webhookUrl": {
+          "type": ["string", "null"],
+          "format": "uri",
+          "description": "URL to POST results to"
+        }
+      }
+    },
+    "adaptive": {
+      "type": "object",
+      "description": "IRT adaptive testing configuration",
+      "properties": {
+        "initialTheta": {
+          "type": "number",
+          "default": 0.0,
+          "description": "Starting ability estimate"
+        },
+        "thetaRange": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "default": [-3.0, 3.0],
+          "description": "Valid range for theta estimates [min, max]"
+        },
+        "standardErrorThreshold": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0.3,
+          "description": "Stop when standard error falls below this"
+        },
+        "minQuestions": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 5,
+          "description": "Minimum questions before stopping"
+        },
+        "maxQuestions": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 20,
+          "description": "Maximum questions to ask"
+        },
+        "selectionMethod": {
+          "type": "string",
+          "enum": ["maximum-information", "random"],
+          "default": "maximum-information",
+          "description": "How to select the next question"
+        }
+      }
+    },
+    "question": {
+      "type": "object",
+      "required": ["id", "type", "prompt"],
+      "oneOf": [
+        { "$ref": "#/definitions/multipleChoiceQuestion" },
+        { "$ref": "#/definitions/multiSelectQuestion" },
+        { "$ref": "#/definitions/freeTextQuestion" },
+        { "$ref": "#/definitions/codeChallengeQuestion" }
+      ]
+    },
+    "baseQuestion": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique question identifier"
+        },
+        "difficulty": {
+          "type": "number",
+          "minimum": -3,
+          "maximum": 3,
+          "default": 0,
+          "description": "IRT difficulty parameter (b)"
+        },
+        "discrimination": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 5,
+          "default": 1,
+          "description": "IRT discrimination parameter (a)"
+        },
+        "category": {
+          "type": "string",
+          "description": "Question category for reporting"
+        },
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The question text"
+        },
+        "context": {
+          "type": "string",
+          "description": "Additional context (code snippets, etc.)"
+        },
+        "explanation": {
+          "type": "string",
+          "description": "Explanation shown after answering"
+        }
+      }
+    },
+    "option": {
+      "type": "object",
+      "required": ["id", "text"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Option identifier"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Option display text"
+        },
+        "correct": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether this option is correct"
+        }
+      }
+    },
+    "multipleChoiceQuestion": {
+      "allOf": [
+        { "$ref": "#/definitions/baseQuestion" },
+        {
+          "type": "object",
+          "required": ["type", "options"],
+          "properties": {
+            "type": {
+              "const": "multiple-choice"
+            },
+            "options": {
+              "type": "array",
+              "minItems": 2,
+              "items": {
+                "$ref": "#/definitions/option"
+              },
+              "description": "Answer options (exactly one should be correct)"
+            }
+          }
+        }
+      ]
+    },
+    "multiSelectQuestion": {
+      "allOf": [
+        { "$ref": "#/definitions/baseQuestion" },
+        {
+          "type": "object",
+          "required": ["type", "options"],
+          "properties": {
+            "type": {
+              "const": "multi-select"
+            },
+            "options": {
+              "type": "array",
+              "minItems": 2,
+              "items": {
+                "$ref": "#/definitions/option"
+              },
+              "description": "Answer options (multiple can be correct)"
+            },
+            "scoring": {
+              "type": "string",
+              "enum": ["all-or-nothing", "partial"],
+              "default": "partial",
+              "description": "Scoring method for partial answers"
+            }
+          }
+        }
+      ]
+    },
+    "freeTextQuestion": {
+      "allOf": [
+        { "$ref": "#/definitions/baseQuestion" },
+        {
+          "type": "object",
+          "required": ["type", "acceptedAnswers"],
+          "properties": {
+            "type": {
+              "const": "free-text"
+            },
+            "acceptedAnswers": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string"
+              },
+              "description": "List of accepted answers"
+            },
+            "matchMode": {
+              "type": "string",
+              "enum": ["exact", "contains", "regex"],
+              "default": "exact",
+              "description": "How to match user input against accepted answers"
+            },
+            "caseSensitive": {
+              "type": "boolean",
+              "default": false,
+              "description": "Whether matching is case-sensitive"
+            }
+          }
+        }
+      ]
+    },
+    "testCase": {
+      "type": "object",
+      "required": ["input", "expected"],
+      "properties": {
+        "input": {
+          "type": "array",
+          "items": {},
+          "description": "Function arguments"
+        },
+        "expected": {
+          "description": "Expected return value"
+        },
+        "description": {
+          "type": "string",
+          "description": "Test case description"
+        }
+      }
+    },
+    "codeChallengeQuestion": {
+      "allOf": [
+        { "$ref": "#/definitions/baseQuestion" },
+        {
+          "type": "object",
+          "required": ["type", "language", "testCases"],
+          "properties": {
+            "type": {
+              "const": "code-challenge"
+            },
+            "language": {
+              "type": "string",
+              "enum": ["javascript", "typescript", "python"],
+              "description": "Programming language"
+            },
+            "starterCode": {
+              "type": "string",
+              "description": "Initial code template"
+            },
+            "testCases": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/definitions/testCase"
+              },
+              "description": "Test cases to validate the solution"
+            },
+            "timeLimit": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 300,
+              "description": "Time limit in seconds for this question"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

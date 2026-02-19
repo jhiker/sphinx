@@ -1,0 +1,101 @@
+{
+  "$schema": "../src/schema/quiz.schema.json",
+  "version": "1.0",
+
+  "metadata": {
+    "id": "sample-security-quiz",
+    "title": "Web Security Fundamentals",
+    "description": "Test your knowledge of common web security vulnerabilities and defenses.",
+    "tags": ["security", "web", "owasp"],
+    "author": "security-team"
+  },
+
+  "config": {
+    "mode": "static",
+    "passingThreshold": 0.7,
+    "timeLimit": null,
+    "randomizeOrder": false,
+    "showCorrectAnswers": "after-completion"
+  },
+
+  "results": {
+    "persistence": ["display"]
+  },
+
+  "questions": [
+    {
+      "id": "q1",
+      "type": "multiple-choice",
+      "difficulty": 0.3,
+      "discrimination": 1.2,
+      "category": "sql-injection",
+      "prompt": "Which technique is most effective for preventing SQL injection attacks?",
+      "context": "```javascript\nconst query = `SELECT * FROM users WHERE id = ${userId}`;\n```",
+      "options": [
+        { "id": "a", "text": "Using parameterized queries or prepared statements", "correct": true },
+        { "id": "b", "text": "Escaping special characters manually", "correct": false },
+        { "id": "c", "text": "Using parseInt() on all inputs", "correct": false },
+        { "id": "d", "text": "Limiting query result size", "correct": false }
+      ],
+      "explanation": "Parameterized queries separate SQL logic from data, making it impossible for user input to be interpreted as SQL code. Manual escaping is error-prone and parseInt only works for numeric inputs."
+    },
+    {
+      "id": "q2",
+      "type": "multi-select",
+      "difficulty": 0.5,
+      "discrimination": 1.4,
+      "category": "xss",
+      "prompt": "Select ALL valid methods for preventing Cross-Site Scripting (XSS) attacks:",
+      "options": [
+        { "id": "a", "text": "Output encoding/escaping based on context", "correct": true },
+        { "id": "b", "text": "Content Security Policy (CSP) headers", "correct": true },
+        { "id": "c", "text": "Input validation and sanitization", "correct": true },
+        { "id": "d", "text": "Using HTTPS instead of HTTP", "correct": false }
+      ],
+      "scoring": "partial",
+      "explanation": "XSS prevention requires a defense-in-depth approach: encode output, use CSP to restrict script sources, and validate/sanitize input. HTTPS protects data in transit but doesn't prevent XSS."
+    },
+    {
+      "id": "q3",
+      "type": "free-text",
+      "difficulty": 0.6,
+      "discrimination": 1.3,
+      "category": "headers",
+      "prompt": "What HTTP response header prevents a page from being embedded in an iframe (to defend against clickjacking)?",
+      "acceptedAnswers": ["X-Frame-Options", "x-frame-options", "Content-Security-Policy frame-ancestors", "CSP frame-ancestors"],
+      "matchMode": "contains",
+      "caseSensitive": false,
+      "explanation": "X-Frame-Options (with DENY or SAMEORIGIN) or Content-Security-Policy with frame-ancestors directive prevents clickjacking by controlling iframe embedding."
+    },
+    {
+      "id": "q4",
+      "type": "multiple-choice",
+      "difficulty": 0.4,
+      "discrimination": 1.5,
+      "category": "authentication",
+      "prompt": "What is the primary security risk of storing passwords in plain text?",
+      "options": [
+        { "id": "a", "text": "Slower database queries", "correct": false },
+        { "id": "b", "text": "If the database is compromised, all passwords are immediately exposed", "correct": true },
+        { "id": "c", "text": "Users can't reset their passwords", "correct": false },
+        { "id": "d", "text": "It takes more storage space", "correct": false }
+      ],
+      "explanation": "Plain text passwords mean a single database breach exposes all user credentials. Passwords should be hashed with a strong algorithm like bcrypt, scrypt, or Argon2."
+    },
+    {
+      "id": "q5",
+      "type": "multiple-choice",
+      "difficulty": 0.7,
+      "discrimination": 1.6,
+      "category": "csrf",
+      "prompt": "Which of the following is the BEST defense against Cross-Site Request Forgery (CSRF)?",
+      "options": [
+        { "id": "a", "text": "Input validation", "correct": false },
+        { "id": "b", "text": "Synchronizer token pattern (CSRF tokens)", "correct": true },
+        { "id": "c", "text": "Rate limiting", "correct": false },
+        { "id": "d", "text": "Strong passwords", "correct": false }
+      ],
+      "explanation": "CSRF tokens are unique per-session values that attackers cannot predict. The server validates these tokens on state-changing requests to ensure the request originated from the legitimate site."
+    }
+  ]
+}

@@ -1,0 +1,202 @@
+{
+  "$schema": "../src/schema/quiz.schema.json",
+  "version": "1.0",
+
+  "metadata": {
+    "id": "adaptive-javascript-quiz",
+    "title": "JavaScript Proficiency Assessment",
+    "description": "Adaptive assessment that adjusts difficulty based on your responses.",
+    "tags": ["javascript", "programming", "adaptive"],
+    "author": "dev-team"
+  },
+
+  "config": {
+    "mode": "adaptive",
+    "passingThreshold": 0.6,
+    "showCorrectAnswers": "after-completion"
+  },
+
+  "adaptive": {
+    "initialTheta": 0.0,
+    "thetaRange": [-3.0, 3.0],
+    "standardErrorThreshold": 0.4,
+    "minQuestions": 5,
+    "maxQuestions": 15,
+    "selectionMethod": "maximum-information"
+  },
+
+  "results": {
+    "persistence": ["display"]
+  },
+
+  "questions": [
+    {
+      "id": "js-easy-1",
+      "type": "multiple-choice",
+      "difficulty": -1.5,
+      "discrimination": 1.0,
+      "category": "basics",
+      "prompt": "What keyword is used to declare a variable in JavaScript?",
+      "options": [
+        { "id": "a", "text": "var", "correct": true },
+        { "id": "b", "text": "variable", "correct": false },
+        { "id": "c", "text": "v", "correct": false },
+        { "id": "d", "text": "declare", "correct": false }
+      ]
+    },
+    {
+      "id": "js-easy-2",
+      "type": "multiple-choice",
+      "difficulty": -1.2,
+      "discrimination": 1.1,
+      "category": "basics",
+      "prompt": "Which method adds an element to the end of an array?",
+      "options": [
+        { "id": "a", "text": "push()", "correct": true },
+        { "id": "b", "text": "pop()", "correct": false },
+        { "id": "c", "text": "shift()", "correct": false },
+        { "id": "d", "text": "unshift()", "correct": false }
+      ]
+    },
+    {
+      "id": "js-easy-3",
+      "type": "multiple-choice",
+      "difficulty": -0.8,
+      "discrimination": 1.2,
+      "category": "basics",
+      "prompt": "What does '===' check in JavaScript?",
+      "options": [
+        { "id": "a", "text": "Value and type equality", "correct": true },
+        { "id": "b", "text": "Only value equality", "correct": false },
+        { "id": "c", "text": "Reference equality", "correct": false },
+        { "id": "d", "text": "Assignment", "correct": false }
+      ]
+    },
+    {
+      "id": "js-med-1",
+      "type": "multiple-choice",
+      "difficulty": 0.0,
+      "discrimination": 1.3,
+      "category": "functions",
+      "prompt": "What is a closure in JavaScript?",
+      "options": [
+        { "id": "a", "text": "A function that has access to variables from its outer scope", "correct": true },
+        { "id": "b", "text": "A way to close a browser window", "correct": false },
+        { "id": "c", "text": "A method to end a loop", "correct": false },
+        { "id": "d", "text": "A type of error handling", "correct": false }
+      ]
+    },
+    {
+      "id": "js-med-2",
+      "type": "multiple-choice",
+      "difficulty": 0.3,
+      "discrimination": 1.4,
+      "category": "async",
+      "prompt": "What does Promise.all() return if one promise rejects?",
+      "options": [
+        { "id": "a", "text": "A rejected promise with the first rejection reason", "correct": true },
+        { "id": "b", "text": "An array with null for rejected promises", "correct": false },
+        { "id": "c", "text": "A resolved promise with partial results", "correct": false },
+        { "id": "d", "text": "It throws an error immediately", "correct": false }
+      ]
+    },
+    {
+      "id": "js-med-3",
+      "type": "multiple-choice",
+      "difficulty": 0.5,
+      "discrimination": 1.5,
+      "category": "objects",
+      "prompt": "What is the output of: Object.keys({a: 1, b: 2}).length",
+      "options": [
+        { "id": "a", "text": "2", "correct": true },
+        { "id": "b", "text": "['a', 'b']", "correct": false },
+        { "id": "c", "text": "{a: 1, b: 2}", "correct": false },
+        { "id": "d", "text": "undefined", "correct": false }
+      ]
+    },
+    {
+      "id": "js-hard-1",
+      "type": "multiple-choice",
+      "difficulty": 1.0,
+      "discrimination": 1.6,
+      "category": "advanced",
+      "prompt": "What is the event loop in JavaScript?",
+      "options": [
+        { "id": "a", "text": "A mechanism that handles asynchronous callbacks by checking the call stack and callback queue", "correct": true },
+        { "id": "b", "text": "A for loop that listens for DOM events", "correct": false },
+        { "id": "c", "text": "A built-in array method for iteration", "correct": false },
+        { "id": "d", "text": "A way to repeat event handlers", "correct": false }
+      ]
+    },
+    {
+      "id": "js-hard-2",
+      "type": "multiple-choice",
+      "difficulty": 1.3,
+      "discrimination": 1.7,
+      "category": "advanced",
+      "prompt": "What is the difference between Object.freeze() and Object.seal()?",
+      "options": [
+        { "id": "a", "text": "freeze prevents all changes; seal allows modifying existing properties but not adding/removing", "correct": true },
+        { "id": "b", "text": "They are aliases for the same operation", "correct": false },
+        { "id": "c", "text": "freeze is for arrays; seal is for objects", "correct": false },
+        { "id": "d", "text": "seal prevents all changes; freeze allows modifications", "correct": false }
+      ]
+    },
+    {
+      "id": "js-hard-3",
+      "type": "multiple-choice",
+      "difficulty": 1.6,
+      "discrimination": 1.8,
+      "category": "advanced",
+      "prompt": "What is a WeakMap and when would you use it?",
+      "options": [
+        { "id": "a", "text": "A Map with weakly held keys that allows garbage collection; used for private data or caching", "correct": true },
+        { "id": "b", "text": "A Map with lower memory usage for small datasets", "correct": false },
+        { "id": "c", "text": "A Map that only stores primitive values", "correct": false },
+        { "id": "d", "text": "A deprecated version of Map", "correct": false }
+      ]
+    },
+    {
+      "id": "js-expert-1",
+      "type": "multiple-choice",
+      "difficulty": 2.0,
+      "discrimination": 1.9,
+      "category": "expert",
+      "prompt": "What is the temporal dead zone (TDZ)?",
+      "options": [
+        { "id": "a", "text": "The period between entering a scope and a let/const declaration being initialized", "correct": true },
+        { "id": "b", "text": "A JavaScript garbage collection phase", "correct": false },
+        { "id": "c", "text": "The time between setTimeout calls", "correct": false },
+        { "id": "d", "text": "A state where promises are neither resolved nor rejected", "correct": false }
+      ]
+    },
+    {
+      "id": "js-expert-2",
+      "type": "multiple-choice",
+      "difficulty": 2.3,
+      "discrimination": 2.0,
+      "category": "expert",
+      "prompt": "What does the Reflect API provide that differs from direct object operations?",
+      "options": [
+        { "id": "a", "text": "Methods return success/failure booleans instead of throwing, and work with Proxy traps", "correct": true },
+        { "id": "b", "text": "Faster performance for object operations", "correct": false },
+        { "id": "c", "text": "Ability to modify frozen objects", "correct": false },
+        { "id": "d", "text": "Access to private class fields", "correct": false }
+      ]
+    },
+    {
+      "id": "js-expert-3",
+      "type": "multiple-choice",
+      "difficulty": 2.6,
+      "discrimination": 2.0,
+      "category": "expert",
+      "prompt": "In the context of JavaScript engines, what is hidden class optimization?",
+      "options": [
+        { "id": "a", "text": "V8's technique of assigning shapes to objects with the same property order for faster property access", "correct": true },
+        { "id": "b", "text": "A way to make class properties private", "correct": false },
+        { "id": "c", "text": "Automatic minification of class names", "correct": false },
+        { "id": "d", "text": "A polyfill for private class fields", "correct": false }
+      ]
+    }
+  ]
+}
