@@ -8,7 +8,7 @@
     "sphinx": "dist/cli.js"
   },
   "scripts": {
-    "build": "tsc && cp -r src/schema dist/ && cp -r templates dist/ && mkdir -p dist/.claude/skills && cp -r .claude/skills/generate-quiz dist/.claude/skills/",
+    "build": "tsc && cp -r src/schema dist/ && cp -r templates dist/ && cp -r skills dist/",
     "dev": "tsc --watch",
     "start": "node dist/cli.js",
     "test": "node --test dist/**/*.test.js"
