@@ -4,6 +4,7 @@ import { Command } from 'commander';
 import { runQuiz } from './commands/quiz.js';
 import { buildHtml } from './commands/build.js';
 import { validateQuiz } from './commands/validate.js';
+import { createGenerateCommand } from './commands/generate.js';
 
 const program = new Command();
 
@@ -64,5 +65,7 @@ program
       process.exit(1);
     }
   });
+
+program.addCommand(createGenerateCommand());
 
 program.parse();
