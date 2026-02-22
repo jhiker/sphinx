@@ -14,6 +14,7 @@ export function createGenerateCommand(): Command {
     .description('Generate quiz from a GitHub repository')
     .argument('<url>', 'GitHub repository URL')
     .option('--token <token>', 'GitHub token')
+    .option('--model <model>', 'Model to use (overrides config default)')
     .option('--focus <focus>', 'Quiz focus: comprehension, changes, practices, security, concepts', 'comprehension')
     .option('--profile <profile>', 'Question profile: quick, standard, thorough', 'standard')
     .option('--questions <n>', 'Override question count', parseInt)
@@ -80,6 +81,7 @@ export function createGenerateCommand(): Command {
 interface GenerateOptions {
   token?: string;
   base?: string;
+  model?: string;
   focus: Focus;
   profile: Profile;
   questions?: number;
@@ -94,6 +96,7 @@ async function runGenerate(
   options: GenerateOptions
 ): Promise<void> {
   const config = await loadConfig();
+  const model = options.model || config.generate.defaultModel || config.llm.model;
 
   const questionCount = options.questions || profiles[options.profile].questions;
 
@@ -104,9 +107,12 @@ async function runGenerate(
 
   console.error(`Generating quiz from ${source} ${subtype}: ${target}`);
   console.error(`Focus: ${options.focus}, Questions: ${questionCount}`);
+  if (model) {
+    console.error(`Model: ${model}`);
+  }
 
   try {
-    const result = await invokeSkill(prompt, config);
+    const result = await invokeSkill(prompt, config, model);
 
     if (options.output) {
       const { writeFile } = await import('fs/promises');
@@ -145,13 +151,18 @@ function buildPrompt(
     `- Questions: ${options.questionCount}`,
     `- Difficulty: ${options.difficulty}`,
     ``,
-    `Output the quiz JSON directly, no other text.`
+    `Return output using the configured JSON schema structured output.`,
+    `Do not wrap JSON in markdown code fences.`
   );
 
   return lines.join('\n');
 }
 
-async function invokeSkill(prompt: string, _config: Awaited<ReturnType<typeof loadConfig>>): Promise<string> {
+async function invokeSkill(
+  prompt: string,
+  _config: Awaited<ReturnType<typeof loadConfig>>,
+  model?: string
+): Promise<string> {
   // Check if running inside Claude Code (nested sessions not supported)
   if (process.env.CLAUDECODE === '1') {
     throw new Error(
@@ -195,17 +206,32 @@ async function invokeSkill(prompt: string, _config: Awaited<ReturnType<typeof lo
   let messageCount = 0;
 
   try {
+    const queryOptions: {
+      cwd: string;
+      settingSources: ('project' | 'user')[];
+      allowedTools: string[];
+      outputFormat: {
+        type: 'json_schema';
+        schema: Record<string, unknown>;
+      };
+      model?: string;
+    } = {
+      cwd: process.cwd(),
+      settingSources: ['project', 'user'],
+      allowedTools: ['Bash', 'Read', 'Glob', 'Grep'],
+      outputFormat: {
+        type: 'json_schema',
+        schema: quizSchema,
+      },
+    };
+
+    if (model) {
+      queryOptions.model = model;
+    }
+
     for await (const message of query({
       prompt,
-      options: {
-        cwd: process.cwd(),
-        settingSources: ['project', 'user'],
-        allowedTools: ['Bash', 'Read', 'Glob', 'Grep'],
-        outputFormat: {
-          type: 'json_schema',
-          schema: quizSchema,
-        },
-      },
+      options: queryOptions,
     })) {
       messageCount += 1;
       lastMessageSummary = summarizeSdkMessage(message);
@@ -219,12 +245,36 @@ async function invokeSkill(prompt: string, _config: Awaited<ReturnType<typeof lo
         const msg = message as Record<string, unknown>;
 
         if (msg.type === 'result') {
-          if (msg.subtype === 'success' && msg.structured_output !== undefined) {
-            // Return the structured output as formatted JSON
-            return JSON.stringify(msg.structured_output, null, 2);
-          } else if (msg.subtype !== 'success') {
-            const errors = (msg.errors as string[]) || [];
-            throw new Error(`Generation failed: ${errors.join(', ') || msg.subtype}`);
+          const subtype = typeof msg.subtype === 'string' ? msg.subtype : 'unknown';
+
+          if (subtype === 'success') {
+            if (msg.structured_output !== undefined) {
+              return JSON.stringify(msg.structured_output, null, 2);
+            }
+
+            const fallback = await tryParseStructuredFallback(msg.result, debugMode);
+            if (fallback) {
+              return fallback;
+            }
+
+            throw new Error(
+              `Result was successful but missing structured_output (result_preview=${previewValue(msg.result)})`
+            );
+          }
+
+          if (subtype === 'error_max_structured_output_retries') {
+            const errors = Array.isArray(msg.errors) ? msg.errors.join(', ') : '';
+            throw new Error(
+              `Structured output retries exhausted. ` +
+                `The model could not satisfy the quiz schema. ` +
+                `Consider simplifying required fields in the schema or tightening the prompt. ` +
+                (errors ? `Errors: ${errors}` : '')
+            );
+          }
+
+          if (subtype !== 'success') {
+            const errors = Array.isArray(msg.errors) ? msg.errors : [];
+            throw new Error(`Generation failed: ${errors.join(', ') || subtype}`);
           }
         }
       }
@@ -256,6 +306,7 @@ function addStandardOptions(
   defaults: { focus: Focus; profile: Profile; difficulty: string }
 ): Command {
   return command
+    .option('--model <model>', 'Model to use (overrides config default)')
     .option('--focus <focus>', 'Quiz focus', defaults.focus)
     .option('--profile <profile>', 'Question profile', defaults.profile)
     .option('--questions <n>', 'Override question count', parseInt)
@@ -272,6 +323,7 @@ function summarizeSdkMessage(message: unknown): string {
   const type = typeof msg.type === 'string' ? msg.type : 'unknown';
   const subtype = typeof msg.subtype === 'string' ? msg.subtype : undefined;
   const hasStructuredOutput = 'structured_output' in msg;
+  const hasResultText = typeof msg.result === 'string' && msg.result.length > 0;
   const errorCount = Array.isArray(msg.errors) ? msg.errors.length : undefined;
 
   const parts = [`type=${type}`];
@@ -280,6 +332,9 @@ function summarizeSdkMessage(message: unknown): string {
   }
   if (hasStructuredOutput) {
     parts.push('structured_output=yes');
+  }
+  if (hasResultText) {
+    parts.push('result_text=yes');
   }
   if (errorCount !== undefined) {
     parts.push(`errors=${errorCount}`);
@@ -334,4 +389,60 @@ function collectCauseMessages(error: Error): string[] {
   }
 
   return causes;
+}
+
+async function tryParseStructuredFallback(result: unknown, debugMode: boolean): Promise<string | null> {
+  if (typeof result !== 'string' || result.trim().length === 0) {
+    return null;
+  }
+
+  const candidate = stripJsonCodeFence(result.trim());
+  if (!looksLikeJson(candidate)) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(candidate);
+    const { parseQuizString } = await import('../core/parser.js');
+    const validation = await parseQuizString(JSON.stringify(parsed));
+
+    if (!validation.success) {
+      if (debugMode) {
+        console.error(
+          `[DEBUG] Fallback JSON parse succeeded but quiz validation failed: ${(validation.errors || []).join('; ')}`
+        );
+      }
+      return null;
+    }
+
+    console.error(
+      `Warning: SDK returned success without structured_output; using validated JSON parsed from result text`
+    );
+    return JSON.stringify(parsed, null, 2);
+  } catch {
+    return null;
+  }
+}
+
+function stripJsonCodeFence(value: string): string {
+  const fencedMatch = value.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  if (fencedMatch) {
+    return fencedMatch[1].trim();
+  }
+  return value;
+}
+
+function looksLikeJson(value: string): boolean {
+  return (
+    (value.startsWith('{') && value.endsWith('}')) ||
+    (value.startsWith('[') && value.endsWith(']'))
+  );
+}
+
+function previewValue(value: unknown): string {
+  if (typeof value !== 'string') {
+    return String(value);
+  }
+  const compact = value.replace(/\s+/g, ' ').trim();
+  return compact.length > 140 ? `${compact.slice(0, 140)}...` : compact;
 }

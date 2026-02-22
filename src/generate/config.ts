@@ -14,6 +14,7 @@ export interface GenerateConfig {
   generate: {
     defaultProfile: 'quick' | 'standard' | 'thorough';
     defaultFocus: 'comprehension' | 'changes' | 'practices' | 'security' | 'concepts';
+    defaultModel?: string;
   };
 }
 
@@ -65,6 +66,9 @@ function loadEnvConfig(): Partial<GenerateConfig> {
   if (process.env.SPHINX_LLM_PROVIDER) {
     llmOverrides.provider = process.env.SPHINX_LLM_PROVIDER as 'anthropic' | 'openai';
   }
+  if (process.env.SPHINX_LLM_MODEL) {
+    llmOverrides.model = process.env.SPHINX_LLM_MODEL;
+  }
   if (process.env.ANTHROPIC_API_KEY) {
     llmOverrides.apiKey = process.env.ANTHROPIC_API_KEY;
   } else if (process.env.OPENAI_API_KEY) {
@@ -78,6 +82,10 @@ function loadEnvConfig(): Partial<GenerateConfig> {
   const githubToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   if (githubToken) {
     config.github = { token: githubToken };
+  }
+
+  if (process.env.SPHINX_DEFAULT_MODEL) {
+    config.generate = { defaultModel: process.env.SPHINX_DEFAULT_MODEL } as GenerateConfig['generate'];
   }
 
   return config;
