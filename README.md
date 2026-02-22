@@ -2,6 +2,8 @@
 
 A JSON-based quiz system for measuring technical competence during development workflows. Supports static and adaptive (IRT-based) difficulty modes, outputs to both CLI and standalone HTML.
 
+The idea is to explore a pattern for challenging humans who want to stay in the loop in the design and implementation of software systems, as their involvement in this process becomes increasingly high-level and indirect. See [Your Brain on ChatGPT: Accumulation of Cognitive Debt when Using an AI Assistant for Essay Writing Task](https://arxiv.org/abs/2506.08872) or [Simon Willison's write-up on the concept](https://simonwillison.net/2026/Feb/15/cognitive-debt/) for more context on the motivation.
+
 ## Installation
 
 ```bash
