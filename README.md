@@ -9,6 +9,7 @@ The idea is to explore a pattern for challenging humans who want to stay in the 
 ```bash
 npm install
 npm run build
+npm link # to set up sphinx cli
 ```
 
 ## Usage
