@@ -147,6 +147,7 @@ function buildPrompt(
   lines.push(
     ``,
     `Parameters:`,
+    `- Version: 1.0`,
     `- Focus: ${options.focus}`,
     `- Questions: ${options.questionCount}`,
     `- Difficulty: ${options.difficulty}`,
@@ -175,22 +176,7 @@ async function invokeSkill(
     );
   }
 
-  // Load the quiz schema for structured output
-  const { readFile } = await import('fs/promises');
-  const { fileURLToPath } = await import('url');
-  const { dirname, join } = await import('path');
-
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = dirname(__filename);
-  const schemaPath = join(__dirname, '..', 'schema', 'quiz.schema.json');
-
-  let quizSchema: Record<string, unknown>;
-  try {
-    const schemaContent = await readFile(schemaPath, 'utf-8');
-    quizSchema = JSON.parse(schemaContent);
-  } catch (err) {
-    throw new Error('Failed to load quiz schema', { cause: err });
-  }
+  const outputSchema = createAgentStructuredQuizSchema();
 
   // Dynamic import to handle SDK
   let query: typeof import('@anthropic-ai/claude-agent-sdk').query;
@@ -221,7 +207,7 @@ async function invokeSkill(
       allowedTools: ['Bash', 'Read', 'Glob', 'Grep'],
       outputFormat: {
         type: 'json_schema',
-        schema: quizSchema,
+        schema: outputSchema,
       },
     };
 
@@ -249,16 +235,12 @@ async function invokeSkill(
 
           if (subtype === 'success') {
             if (msg.structured_output !== undefined) {
-              return JSON.stringify(msg.structured_output, null, 2);
+              return await validateStructuredQuizOutput(msg.structured_output);
             }
-
-            const fallback = await tryParseStructuredFallback(msg.result, debugMode);
-            if (fallback) {
-              return fallback;
-            }
-
             throw new Error(
-              `Result was successful but missing structured_output (result_preview=${previewValue(msg.result)})`
+              `Result was successful but missing structured_output. ` +
+                `Structured output is required for this command. ` +
+                `(result_preview=${previewValue(msg.result)})`
             );
           }
 
@@ -391,58 +373,128 @@ function collectCauseMessages(error: Error): string[] {
   return causes;
 }
 
-async function tryParseStructuredFallback(result: unknown, debugMode: boolean): Promise<string | null> {
-  if (typeof result !== 'string' || result.trim().length === 0) {
-    return null;
-  }
-
-  const candidate = stripJsonCodeFence(result.trim());
-  if (!looksLikeJson(candidate)) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(candidate);
-    const { parseQuizString } = await import('../core/parser.js');
-    const validation = await parseQuizString(JSON.stringify(parsed));
-
-    if (!validation.success) {
-      if (debugMode) {
-        console.error(
-          `[DEBUG] Fallback JSON parse succeeded but quiz validation failed: ${(validation.errors || []).join('; ')}`
-        );
-      }
-      return null;
-    }
-
-    console.error(
-      `Warning: SDK returned success without structured_output; using validated JSON parsed from result text`
-    );
-    return JSON.stringify(parsed, null, 2);
-  } catch {
-    return null;
-  }
-}
-
-function stripJsonCodeFence(value: string): string {
-  const fencedMatch = value.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
-  if (fencedMatch) {
-    return fencedMatch[1].trim();
-  }
-  return value;
-}
-
-function looksLikeJson(value: string): boolean {
-  return (
-    (value.startsWith('{') && value.endsWith('}')) ||
-    (value.startsWith('[') && value.endsWith(']'))
-  );
-}
-
 function previewValue(value: unknown): string {
   if (typeof value !== 'string') {
     return String(value);
   }
   const compact = value.replace(/\s+/g, ' ').trim();
   return compact.length > 140 ? `${compact.slice(0, 140)}...` : compact;
+}
+
+async function validateStructuredQuizOutput(output: unknown): Promise<string> {
+  const json = JSON.stringify(output);
+  const { parseQuizString } = await import('../core/parser.js');
+  const validation = await parseQuizString(json);
+
+  if (!validation.success) {
+    const details = (validation.errors || []).slice(0, 5).join('; ');
+    throw new Error(`Structured output received but failed quiz validation: ${details}`);
+  }
+
+  return JSON.stringify(output, null, 2);
+}
+
+function createAgentStructuredQuizSchema(): Record<string, unknown> {
+  return {
+    type: 'object',
+    required: ['version', 'metadata', 'config', 'questions'],
+    properties: {
+      version: { type: 'string', pattern: '^\\d+\\.\\d+$' },
+      metadata: {
+        type: 'object',
+        required: ['id', 'title'],
+        properties: {
+          id: { type: 'string', pattern: '^[a-z0-9-]+$' },
+          title: { type: 'string' },
+          description: { type: 'string' },
+          tags: { type: 'array', items: { type: 'string' } },
+          author: { type: 'string' },
+        },
+      },
+      config: {
+        type: 'object',
+        required: ['mode', 'passingThreshold', 'timeLimit', 'randomizeOrder', 'showCorrectAnswers'],
+        properties: {
+          mode: { type: 'string', enum: ['static', 'adaptive'] },
+          questionTypes: {
+            type: 'array',
+            items: { type: 'string', enum: ['multiple-choice', 'multi-select', 'free-text', 'code-challenge'] },
+          },
+          questionCount: { type: 'integer' },
+          passingThreshold: { type: 'number' },
+          timeLimit: { type: ['integer', 'null'] },
+          randomizeOrder: { type: 'boolean' },
+          showCorrectAnswers: { type: 'string', enum: ['never', 'after-each', 'after-completion'] },
+        },
+      },
+      results: {
+        type: 'object',
+        properties: {
+          persistence: { type: 'array', items: { type: 'string', enum: ['display', 'file', 'webhook'] } },
+          filePath: { type: 'string' },
+          webhookUrl: { type: ['string', 'null'] },
+        },
+      },
+      adaptive: {
+        type: 'object',
+        properties: {
+          initialTheta: { type: 'number' },
+          thetaRange: { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 },
+          standardErrorThreshold: { type: 'number' },
+          minQuestions: { type: 'integer' },
+          maxQuestions: { type: 'integer' },
+          selectionMethod: { type: 'string', enum: ['maximum-information', 'random'] },
+        },
+      },
+      questions: {
+        type: 'array',
+        minItems: 1,
+        items: {
+          type: 'object',
+          required: ['id', 'type', 'prompt'],
+          properties: {
+            id: { type: 'string' },
+            type: { type: 'string', enum: ['multiple-choice', 'multi-select', 'free-text', 'code-challenge'] },
+            prompt: { type: 'string' },
+            difficulty: { type: 'number' },
+            discrimination: { type: 'number' },
+            category: { type: 'string' },
+            context: { type: 'string' },
+            explanation: { type: 'string' },
+            options: {
+              type: 'array',
+              items: {
+                type: 'object',
+                required: ['id', 'text'],
+                properties: {
+                  id: { type: 'string' },
+                  text: { type: 'string' },
+                  correct: { type: 'boolean' },
+                },
+              },
+            },
+            scoring: { type: 'string', enum: ['all-or-nothing', 'partial'] },
+            acceptedAnswers: { type: 'array', items: { type: 'string' } },
+            matchMode: { type: 'string', enum: ['exact', 'contains', 'regex'] },
+            caseSensitive: { type: 'boolean' },
+            language: { type: 'string', enum: ['javascript', 'typescript', 'python'] },
+            starterCode: { type: 'string' },
+            testCases: {
+              type: 'array',
+              items: {
+                type: 'object',
+                required: ['input', 'expected'],
+                properties: {
+                  input: { type: 'array' },
+                  expected: {},
+                  description: { type: 'string' },
+                },
+              },
+            },
+            timeLimit: { type: 'integer' },
+          },
+        },
+      },
+    },
+  };
 }

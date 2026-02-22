@@ -64,6 +64,10 @@ export class QuizParser {
       allErrors: true,
       verbose: true,
       strict: false,
+      // Schema uses `format: "uri"` but we don't register format plugins.
+      // Disable format validation to avoid noisy warnings while preserving
+      // current behavior (format was already ignored).
+      validateFormats: false,
     });
   }
 
