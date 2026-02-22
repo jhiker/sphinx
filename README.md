@@ -31,6 +31,58 @@ Open the generated HTML file in any browser - it works completely offline.
 sphinx validate ./examples/sample-quiz.json --verbose
 ```
 
+### Generate a Quiz with AI
+
+Generate from supported sources:
+
+```bash
+# Local git repo
+sphinx generate git local .
+
+# GitHub repo
+sphinx generate github repo https://github.com/org/repo
+
+# Git branch diff
+sphinx generate git diff feature-branch --base main
+```
+
+Write to file:
+
+```bash
+sphinx generate git local . -o quiz.json
+```
+
+Model selection:
+
+```bash
+# Per-command override (highest priority)
+sphinx generate git local . --model claude-sonnet-4-6
+```
+
+Config defaults (`~/.sphinx/config.json`):
+
+```json
+{
+  "generate": {
+    "defaultModel": "claude-sonnet-4-6"
+  },
+  "llm": {
+    "model": "claude-opus-4-6"
+  }
+}
+```
+
+Model precedence:
+- `--model` CLI flag
+- `generate.defaultModel` from config
+- `llm.model` from config
+
+Environment variables:
+- `SPHINX_DEFAULT_MODEL`
+- `SPHINX_LLM_MODEL`
+
+`generate` uses structured output (`json_schema`) and validates quiz JSON against the project schema.
+
 ### CI Mode
 
 For automated testing in CI pipelines:
@@ -209,11 +261,26 @@ See the `examples/` directory for:
 # Build
 npm run build
 
+# Lint
+npm run lint
+
 # Watch mode
 npm run dev
 
 # Run CLI
 node dist/cli.js quiz ./examples/sample-quiz.json
+```
+
+### Makefile Targets
+
+This repo also includes a `Makefile` with common workflows:
+
+```bash
+make help
+make install
+make lint
+make test
+make check
 ```
 
 ## License
