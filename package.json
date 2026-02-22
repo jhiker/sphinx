@@ -11,7 +11,9 @@
     "build": "tsc && cp -r src/schema dist/ && cp -r templates dist/ && cp -r skills dist/",
     "dev": "tsc --watch",
     "start": "node dist/cli.js",
-    "test": "node --test dist/**/*.test.js"
+    "test": "node --test dist/**/*.test.js",
+    "lint": "eslint . --max-warnings=0",
+    "lint:fix": "eslint . --fix"
   },
   "keywords": [
     "quiz",
@@ -31,6 +33,10 @@
   "devDependencies": {
     "@types/node": "^20.11.0",
     "@types/prompts": "^2.4.9",
-    "typescript": "^5.3.0"
+    "@eslint/js": "^9.21.0",
+    "eslint": "^9.21.0",
+    "globals": "^15.15.0",
+    "typescript": "^5.3.0",
+    "typescript-eslint": "^8.25.0"
   }
 }
