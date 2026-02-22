@@ -188,6 +188,8 @@ async function invokeSkill(
   }
 
   const debugMode = process.env.SPHINX_DEBUG === '1';
+  const progress = new GenerateProgressBar(!debugMode);
+  progress.start('Starting generation');
   let lastMessageSummary = 'none';
   let messageCount = 0;
 
@@ -221,6 +223,7 @@ async function invokeSkill(
     })) {
       messageCount += 1;
       lastMessageSummary = summarizeSdkMessage(message);
+      progress.onMessage(messageCount, lastMessageSummary);
 
       if (debugMode) {
         console.error(`[DEBUG] Message:`, JSON.stringify(message, null, 2).substring(0, 500));
@@ -235,7 +238,9 @@ async function invokeSkill(
 
           if (subtype === 'success') {
             if (msg.structured_output !== undefined) {
-              return await validateStructuredQuizOutput(msg.structured_output);
+              const validated = await validateStructuredQuizOutput(msg.structured_output);
+              progress.complete('Structured output validated');
+              return validated;
             }
             throw new Error(
               `Result was successful but missing structured_output. ` +
@@ -266,6 +271,7 @@ async function invokeSkill(
       `No structured output received from SDK (messages=${messageCount}, last=${lastMessageSummary})`
     );
   } catch (err) {
+    progress.fail('Generation failed');
     const errObj = toError(err);
     const details = buildSdkFailureDetails(errObj, lastMessageSummary, messageCount);
 
@@ -280,6 +286,89 @@ async function invokeSkill(
     }
 
     throw new Error(`SDK query failed: ${details}`, { cause: err });
+  }
+}
+
+class GenerateProgressBar {
+  private readonly enabled: boolean;
+  private currentPercent = 0;
+  private lastLabel = '';
+  private readonly width = 28;
+
+  constructor(enabled: boolean) {
+    this.enabled = enabled && process.stderr.isTTY;
+  }
+
+  start(label: string): void {
+    if (!this.enabled) {
+      return;
+    }
+    this.currentPercent = 5;
+    this.render(this.currentPercent, label);
+  }
+
+  onMessage(messageCount: number, summary: string): void {
+    if (!this.enabled) {
+      return;
+    }
+
+    let target = Math.min(92, 10 + messageCount * 4);
+    if (summary.includes('type=assistant')) {
+      target = Math.max(target, Math.min(94, 18 + messageCount * 5));
+    }
+    if (summary.includes('type=result')) {
+      target = Math.max(target, 96);
+    }
+
+    this.advanceTo(target, this.labelForSummary(summary));
+  }
+
+  complete(label: string): void {
+    if (!this.enabled) {
+      return;
+    }
+    this.render(100, label);
+    process.stderr.write('\n');
+  }
+
+  fail(label: string): void {
+    if (!this.enabled) {
+      return;
+    }
+    this.render(this.currentPercent, label);
+    process.stderr.write('\n');
+  }
+
+  private advanceTo(target: number, label: string): void {
+    if (target <= this.currentPercent && label === this.lastLabel) {
+      return;
+    }
+    this.render(Math.max(this.currentPercent, target), label);
+  }
+
+  private labelForSummary(summary: string): string {
+    if (summary.includes('type=result')) {
+      return 'Finalizing result';
+    }
+    if (summary.includes('type=assistant')) {
+      return 'Composing quiz';
+    }
+    if (summary.includes('type=tool_use')) {
+      return 'Reading sources';
+    }
+    if (summary.includes('type=system')) {
+      return 'Planning';
+    }
+    return 'Processing';
+  }
+
+  private render(percent: number, label: string): void {
+    const normalized = Math.max(0, Math.min(100, Math.floor(percent)));
+    const filled = Math.round((normalized / 100) * this.width);
+    const bar = `${'#'.repeat(filled)}${'-'.repeat(this.width - filled)}`;
+    this.currentPercent = normalized;
+    this.lastLabel = label;
+    process.stderr.write(`\r[${bar}] ${String(normalized).padStart(3, ' ')}% ${label}`);
   }
 }
 
