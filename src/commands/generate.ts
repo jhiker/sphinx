@@ -23,19 +23,16 @@ export function createGenerateCommand(): Command {
       await runGenerate('github', 'repo', url, options);
     });
 
-  github
-    .command('pr')
-    .description('Generate quiz from a GitHub pull request')
-    .argument('<url>', 'GitHub PR URL')
-    .option('--token <token>', 'GitHub token')
-    .option('--focus <focus>', 'Quiz focus', 'changes')
-    .option('--profile <profile>', 'Question profile', 'standard')
-    .option('--questions <n>', 'Override question count', parseInt)
-    .option('--difficulty <level>', 'Difficulty', 'mixed')
-    .option('-o, --output <file>', 'Output file')
-    .action(async (url, options) => {
-      await runGenerate('github', 'pr', url, options);
-    });
+  addStandardOptions(
+    github
+      .command('pr')
+      .description('Generate quiz from a GitHub pull request')
+      .argument('<url>', 'GitHub PR URL')
+      .option('--token <token>', 'GitHub token'),
+    { focus: 'changes', profile: 'standard', difficulty: 'mixed' }
+  ).action(async (url, options) => {
+    await runGenerate('github', 'pr', url, options);
+  });
 
   generate.addCommand(github);
 
@@ -43,48 +40,39 @@ export function createGenerateCommand(): Command {
   const git = new Command('git')
     .description('Generate quiz from local git content');
 
-  git
-    .command('local')
-    .description('Generate quiz from local git repository')
-    .argument('[path]', 'Path to repository', '.')
-    .option('--focus <focus>', 'Quiz focus', 'comprehension')
-    .option('--profile <profile>', 'Question profile', 'standard')
-    .option('--questions <n>', 'Override question count', parseInt)
-    .option('--difficulty <level>', 'Difficulty', 'mixed')
-    .option('-o, --output <file>', 'Output file')
-    .action(async (path, options) => {
-      await runGenerate('git', 'local', path, options);
-    });
+  addStandardOptions(
+    git
+      .command('local')
+      .description('Generate quiz from local git repository')
+      .argument('[path]', 'Path to repository', '.'),
+    { focus: 'comprehension', profile: 'standard', difficulty: 'mixed' }
+  ).action(async (path, options) => {
+    await runGenerate('git', 'local', path, options);
+  });
 
-  git
-    .command('diff')
-    .description('Generate quiz from git branch diff')
-    .argument('<branch>', 'Branch to diff')
-    .option('--base <base>', 'Base branch to diff against', 'main')
-    .option('--focus <focus>', 'Quiz focus', 'changes')
-    .option('--profile <profile>', 'Question profile', 'standard')
-    .option('--questions <n>', 'Override question count', parseInt)
-    .option('--difficulty <level>', 'Difficulty', 'mixed')
-    .option('-o, --output <file>', 'Output file')
-    .action(async (branch, options) => {
-      await runGenerate('git', 'diff', branch, options);
-    });
+  addStandardOptions(
+    git
+      .command('diff')
+      .description('Generate quiz from git branch diff')
+      .argument('<branch>', 'Branch to diff')
+      .option('--base <base>', 'Base branch to diff against', 'main'),
+    { focus: 'changes', profile: 'standard', difficulty: 'mixed' }
+  ).action(async (branch, options) => {
+    await runGenerate('git', 'diff', branch, options);
+  });
 
   generate.addCommand(git);
 
   // Confluence subcommand
-  generate
-    .command('confluence')
-    .description('Generate quiz from Confluence page')
-    .argument('<url>', 'Confluence page URL')
-    .option('--focus <focus>', 'Quiz focus', 'concepts')
-    .option('--profile <profile>', 'Question profile', 'standard')
-    .option('--questions <n>', 'Override question count', parseInt)
-    .option('--difficulty <level>', 'Difficulty', 'mixed')
-    .option('-o, --output <file>', 'Output file')
-    .action(async (url, options) => {
-      await runGenerate('confluence', 'page', url, options);
-    });
+  addStandardOptions(
+    generate
+      .command('confluence')
+      .description('Generate quiz from Confluence page')
+      .argument('<url>', 'Confluence page URL'),
+    { focus: 'concepts', profile: 'standard', difficulty: 'mixed' }
+  ).action(async (url, options) => {
+    await runGenerate('confluence', 'page', url, options);
+  });
 
   return generate;
 }
@@ -128,7 +116,7 @@ async function runGenerate(
       console.log(result);
     }
   } catch (error) {
-    console.error('Error generating quiz:', (error as Error).message);
+    logError('Error generating quiz', error);
     process.exit(1);
   }
 }
@@ -164,31 +152,186 @@ function buildPrompt(
 }
 
 async function invokeSkill(prompt: string, _config: Awaited<ReturnType<typeof loadConfig>>): Promise<string> {
+  // Check if running inside Claude Code (nested sessions not supported)
+  if (process.env.CLAUDECODE === '1') {
+    throw new Error(
+      `Cannot run 'sphinx generate' from within Claude Code.\n` +
+      `The generate command uses the Claude Agent SDK which spawns Claude Code as a subprocess.\n` +
+      `Nested Claude Code sessions are not supported.\n\n` +
+      `To generate a quiz, either:\n` +
+      `  1. Run 'sphinx generate' from a regular terminal (outside Claude Code)\n` +
+      `  2. Ask Claude Code directly to generate the quiz JSON for you`
+    );
+  }
+
+  // Load the quiz schema for structured output
+  const { readFile } = await import('fs/promises');
+  const { fileURLToPath } = await import('url');
+  const { dirname, join } = await import('path');
+
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = dirname(__filename);
+  const schemaPath = join(__dirname, '..', 'schema', 'quiz.schema.json');
+
+  let quizSchema: Record<string, unknown>;
+  try {
+    const schemaContent = await readFile(schemaPath, 'utf-8');
+    quizSchema = JSON.parse(schemaContent);
+  } catch (err) {
+    throw new Error('Failed to load quiz schema', { cause: err });
+  }
+
   // Dynamic import to handle SDK
-  const { query } = await import('@anthropic-ai/claude-agent-sdk');
+  let query: typeof import('@anthropic-ai/claude-agent-sdk').query;
+  try {
+    const sdk = await import('@anthropic-ai/claude-agent-sdk');
+    query = sdk.query;
+  } catch (err) {
+    throw new Error('Failed to load Claude Agent SDK', { cause: err });
+  }
 
-  let result = '';
+  const debugMode = process.env.SPHINX_DEBUG === '1';
+  let lastMessageSummary = 'none';
+  let messageCount = 0;
 
-  for await (const message of query({
-    prompt,
-    options: {
-      cwd: process.cwd(),
-      settingSources: ['project', 'user'],
-      allowedTools: ['Skill', 'Bash', 'Read', 'Glob', 'Grep', 'Write'],
-    },
-  })) {
-    if (typeof message === 'string') {
-      result += message;
-    } else if (message && typeof message === 'object' && 'type' in message && message.type === 'text') {
-      result += (message as { type: 'text'; text: string }).text;
+  try {
+    for await (const message of query({
+      prompt,
+      options: {
+        cwd: process.cwd(),
+        settingSources: ['project', 'user'],
+        allowedTools: ['Bash', 'Read', 'Glob', 'Grep'],
+        outputFormat: {
+          type: 'json_schema',
+          schema: quizSchema,
+        },
+      },
+    })) {
+      messageCount += 1;
+      lastMessageSummary = summarizeSdkMessage(message);
+
+      if (debugMode) {
+        console.error(`[DEBUG] Message:`, JSON.stringify(message, null, 2).substring(0, 500));
+      }
+
+      // Check for result message with structured output
+      if (message && typeof message === 'object') {
+        const msg = message as Record<string, unknown>;
+
+        if (msg.type === 'result') {
+          if (msg.subtype === 'success' && msg.structured_output !== undefined) {
+            // Return the structured output as formatted JSON
+            return JSON.stringify(msg.structured_output, null, 2);
+          } else if (msg.subtype !== 'success') {
+            const errors = (msg.errors as string[]) || [];
+            throw new Error(`Generation failed: ${errors.join(', ') || msg.subtype}`);
+          }
+        }
+      }
     }
+
+    throw new Error(
+      `No structured output received from SDK (messages=${messageCount}, last=${lastMessageSummary})`
+    );
+  } catch (err) {
+    const errObj = toError(err);
+    const details = buildSdkFailureDetails(errObj, lastMessageSummary, messageCount);
+
+    if (details.includes('exited with code 1')) {
+      throw new Error(
+        `SDK query failed: ${details}\n\nPossible causes:` +
+          `\n  - Claude Code is not installed or not in PATH` +
+          `\n  - Missing API key or authentication issue` +
+          `\n\nTo debug: run 'claude --version' to verify installation`,
+        { cause: err }
+      );
+    }
+
+    throw new Error(`SDK query failed: ${details}`, { cause: err });
+  }
+}
+
+function addStandardOptions(
+  command: Command,
+  defaults: { focus: Focus; profile: Profile; difficulty: string }
+): Command {
+  return command
+    .option('--focus <focus>', 'Quiz focus', defaults.focus)
+    .option('--profile <profile>', 'Question profile', defaults.profile)
+    .option('--questions <n>', 'Override question count', parseInt)
+    .option('--difficulty <level>', 'Difficulty', defaults.difficulty)
+    .option('-o, --output <file>', 'Output file');
+}
+
+function summarizeSdkMessage(message: unknown): string {
+  if (!message || typeof message !== 'object') {
+    return String(message);
   }
 
-  // Extract JSON from result
-  const jsonMatch = result.match(/\{[\s\S]*\}/);
-  if (jsonMatch) {
-    return jsonMatch[0];
+  const msg = message as Record<string, unknown>;
+  const type = typeof msg.type === 'string' ? msg.type : 'unknown';
+  const subtype = typeof msg.subtype === 'string' ? msg.subtype : undefined;
+  const hasStructuredOutput = 'structured_output' in msg;
+  const errorCount = Array.isArray(msg.errors) ? msg.errors.length : undefined;
+
+  const parts = [`type=${type}`];
+  if (subtype) {
+    parts.push(`subtype=${subtype}`);
+  }
+  if (hasStructuredOutput) {
+    parts.push('structured_output=yes');
+  }
+  if (errorCount !== undefined) {
+    parts.push(`errors=${errorCount}`);
   }
 
-  return result;
+  return parts.join(' ');
+}
+
+function buildSdkFailureDetails(err: Error, lastMessageSummary: string, messageCount: number): string {
+  if (err.message.includes('No structured output received from SDK')) {
+    return `No structured output received from SDK (messages=${messageCount}, last=${lastMessageSummary})`;
+  }
+
+  return err.message;
+}
+
+function toError(error: unknown): Error {
+  if (error instanceof Error) {
+    return error;
+  }
+
+  return new Error(typeof error === 'string' ? error : JSON.stringify(error));
+}
+
+function logError(prefix: string, error: unknown): void {
+  const err = toError(error);
+  console.error(`${prefix}: ${err.message}`);
+
+  const causeMessages = collectCauseMessages(err);
+  for (const message of causeMessages) {
+    console.error(`Cause: ${message}`);
+  }
+
+  if (process.env.SPHINX_DEBUG === '1' && err.stack) {
+    console.error(err.stack);
+  }
+}
+
+function collectCauseMessages(error: Error): string[] {
+  const causes: string[] = [];
+  let current: unknown = error.cause;
+
+  while (current) {
+    if (current instanceof Error) {
+      causes.push(current.message);
+      current = current.cause;
+      continue;
+    }
+
+    causes.push(String(current));
+    break;
+  }
+
+  return causes;
 }
