@@ -11,7 +11,7 @@
     "build": "tsc && cp -r src/schema dist/ && cp -r templates dist/ && cp -r skills dist/",
     "dev": "tsc --watch",
     "start": "node dist/cli.js",
-    "test": "node --test dist/**/*.test.js",
+    "test": "node --test $(find dist -name '*.test.js' -type f)",
     "lint": "eslint . --max-warnings=0",
     "lint:fix": "eslint . --fix"
   },
