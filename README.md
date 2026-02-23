@@ -14,7 +14,7 @@ npm link # to set up sphinx cli
 
 ## Usage
 
-### Run a Quiz Interactively
+### Run a Quiz Interactively in TUI
 
 ```bash
 sphinx quiz ./examples/sample-quiz.json
@@ -24,6 +24,7 @@ sphinx quiz ./examples/sample-quiz.json
 
 ```bash
 sphinx build ./examples/sample-quiz.json -o quiz.html
+open quiz.html # to open in browser
 ```
 
 Open the generated HTML file in any browser - it works completely offline.
@@ -35,6 +36,17 @@ sphinx validate ./examples/sample-quiz.json --verbose
 ```
 
 ### Generate a Quiz with AI
+
+Quiz generation is packaged as a skill available in `skills/generate-quiz`. It is possible activate this skill in an agentic coding assistant and request generation of a quiz given a set of tools. 
+
+### Using CLI
+
+There is also a cli command for quiz generation, which under the hood uses this skill with Claude SDK and structured outputs functionality to guarantee conformance with the json format. It also includes common presets for different input and output formats. This approach is currently a bit more tested.
+
+
+*Requirements:*
+
+You'll need to provide an `ANTHROPIC_API_KEY` with an API Key that supports the Claude API format.
 
 Generate from supported sources:
 
