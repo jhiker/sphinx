@@ -8,7 +8,7 @@ import {
 } from '../core/question-types.js';
 import type { Quiz, Question, QuizResult, QuestionResult } from '../core/types.js';
 import { CLIRenderer } from '../renderers/cli.js';
-import { displayResults, displayResultsJson } from '../results/display.js';
+import { displayResultsJson } from '../results/display.js';
 import { saveResultsToFile } from '../results/file.js';
 import { sendResultsToWebhook } from '../results/webhook.js';
 
@@ -250,7 +250,7 @@ async function promptForAnswer(question: Question): Promise<string | string[] | 
           value: o.id,
         })),
       });
-      return response.answer;
+      return readPromptStringField(response, 'answer');
     }
 
     case 'multi-select': {
@@ -264,7 +264,7 @@ async function promptForAnswer(question: Question): Promise<string | string[] | 
         })),
         min: 1,
       });
-      return response.answers;
+      return readPromptStringArrayField(response, 'answers');
     }
 
     case 'free-text': {
@@ -273,7 +273,7 @@ async function promptForAnswer(question: Question): Promise<string | string[] | 
         name: 'answer',
         message: 'Your answer:',
       });
-      return response.answer;
+      return readPromptStringField(response, 'answer');
     }
 
     case 'code-challenge': {
@@ -286,9 +286,28 @@ async function promptForAnswer(question: Question): Promise<string | string[] | 
         name: 'code',
         message: 'Enter your code (single line, or "skip" to skip):',
       });
-      return response.code;
+      return readPromptStringField(response, 'code');
     }
   }
+}
+
+function readPromptStringField(response: unknown, key: string): string | undefined {
+  if (!response || typeof response !== 'object') {
+    return undefined;
+  }
+  const value = (response as Record<string, unknown>)[key];
+  return typeof value === 'string' ? value : undefined;
+}
+
+function readPromptStringArrayField(response: unknown, key: string): string[] | undefined {
+  if (!response || typeof response !== 'object') {
+    return undefined;
+  }
+  const value = (response as Record<string, unknown>)[key];
+  if (!Array.isArray(value) || !value.every((item) => typeof item === 'string')) {
+    return undefined;
+  }
+  return value;
 }
 
 async function runCIMode(quiz: Quiz, options: QuizOptions): Promise<QuizResult> {

@@ -52,7 +52,11 @@ async function loadConfigFile(): Promise<Partial<GenerateConfig>> {
 
   try {
     const content = await readFile(configPath, 'utf-8');
-    return JSON.parse(content);
+    const parsed: unknown = JSON.parse(content);
+    if (!parsed || typeof parsed !== 'object') {
+      return {};
+    }
+    return parsed as Partial<GenerateConfig>;
   } catch {
     return {};
   }

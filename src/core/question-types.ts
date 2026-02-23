@@ -3,7 +3,6 @@ import type {
   MultipleChoiceQuestion,
   MultiSelectQuestion,
   FreeTextQuestion,
-  CodeChallengeQuestion,
   Option,
 } from './types.js';
 
@@ -281,7 +280,7 @@ export function supportsPartialCredit(question: Question): boolean {
 /**
  * Get the maximum score for a question
  */
-export function getMaxScore(question: Question): number {
+export function getMaxScore(_question: Question): number {
   // All questions have a max score of 1 in our system
   return 1;
 }

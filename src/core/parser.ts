@@ -10,9 +10,11 @@ interface ValidateFunction {
 }
 
 // Use Ajv with draft-07 since draft-2020-12 requires additional setup
-const Ajv = require('ajv').default as new (opts?: Options) => {
-  compile(schema: AnySchema): ValidateFunction;
-};
+const Ajv = (require('ajv') as {
+  default: new (opts?: Options) => {
+    compile(schema: AnySchema): ValidateFunction;
+  };
+}).default;
 import { resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -76,7 +78,8 @@ export class QuizParser {
 
     const schemaPath = join(__dirname, '..', 'schema', 'quiz.schema.json');
     const schemaContent = await readFile(schemaPath, 'utf-8');
-    this.schema = JSON.parse(schemaContent);
+    const parsedSchema: unknown = JSON.parse(schemaContent);
+    this.schema = parsedSchema as AnySchema;
     this.schemaLoaded = true;
   }
 
@@ -86,7 +89,7 @@ export class QuizParser {
 
       const absolutePath = resolve(filePath);
       const content = await readFile(absolutePath, 'utf-8');
-      const data = JSON.parse(content);
+      const data: unknown = JSON.parse(content);
 
       return this.validate(data);
     } catch (error) {
@@ -112,7 +115,7 @@ export class QuizParser {
   async parseString(jsonString: string): Promise<ParseResult> {
     try {
       await this.loadSchema();
-      const data = JSON.parse(jsonString);
+      const data: unknown = JSON.parse(jsonString);
       return this.validate(data);
     } catch (error) {
       if (error instanceof SyntaxError) {

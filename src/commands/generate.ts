@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { query } from '@anthropic-ai/claude-agent-sdk';
 import { loadConfig, profiles, type Profile, type Focus } from '../generate/config.js';
 
 export function createGenerateCommand(): Command {
@@ -20,7 +21,7 @@ export function createGenerateCommand(): Command {
     .option('--questions <n>', 'Override question count', parseInt)
     .option('--difficulty <level>', 'Difficulty: easy, medium, hard, mixed', 'mixed')
     .option('-o, --output <file>', 'Output file (default: stdout)')
-    .action(async (url, options) => {
+    .action(async (url: string, options: GenerateOptions) => {
       await runGenerate('github', 'repo', url, options);
     });
 
@@ -31,7 +32,7 @@ export function createGenerateCommand(): Command {
       .argument('<url>', 'GitHub PR URL')
       .option('--token <token>', 'GitHub token'),
     { focus: 'changes', profile: 'standard', difficulty: 'mixed' }
-  ).action(async (url, options) => {
+  ).action(async (url: string, options: GenerateOptions) => {
     await runGenerate('github', 'pr', url, options);
   });
 
@@ -47,7 +48,7 @@ export function createGenerateCommand(): Command {
       .description('Generate quiz from local git repository')
       .argument('[path]', 'Path to repository', '.'),
     { focus: 'comprehension', profile: 'standard', difficulty: 'mixed' }
-  ).action(async (path, options) => {
+  ).action(async (path: string, options: GenerateOptions) => {
     await runGenerate('git', 'local', path, options);
   });
 
@@ -58,7 +59,7 @@ export function createGenerateCommand(): Command {
       .argument('<branch>', 'Branch to diff')
       .option('--base <base>', 'Base branch to diff against', 'main'),
     { focus: 'changes', profile: 'standard', difficulty: 'mixed' }
-  ).action(async (branch, options) => {
+  ).action(async (branch: string, options: GenerateOptions) => {
     await runGenerate('git', 'diff', branch, options);
   });
 
@@ -71,7 +72,7 @@ export function createGenerateCommand(): Command {
       .description('Generate quiz from Confluence page')
       .argument('<url>', 'Confluence page URL'),
     { focus: 'concepts', profile: 'standard', difficulty: 'mixed' }
-  ).action(async (url, options) => {
+  ).action(async (url: string, options: GenerateOptions) => {
     await runGenerate('confluence', 'page', url, options);
   });
 
@@ -177,15 +178,6 @@ async function invokeSkill(
   }
 
   const outputSchema = createAgentStructuredQuizSchema();
-
-  // Dynamic import to handle SDK
-  let query: typeof import('@anthropic-ai/claude-agent-sdk').query;
-  try {
-    const sdk = await import('@anthropic-ai/claude-agent-sdk');
-    query = sdk.query;
-  } catch (err) {
-    throw new Error('Failed to load Claude Agent SDK', { cause: err });
-  }
 
   const debugMode = process.env.SPHINX_DEBUG === '1';
   const progress = new GenerateProgressBar(!debugMode);
@@ -455,7 +447,7 @@ function collectCauseMessages(error: Error): string[] {
       continue;
     }
 
-    causes.push(String(current));
+    causes.push(stringifyUnknown(current));
     break;
   }
 
@@ -464,10 +456,30 @@ function collectCauseMessages(error: Error): string[] {
 
 function previewValue(value: unknown): string {
   if (typeof value !== 'string') {
-    return String(value);
+    return stringifyUnknown(value);
   }
   const compact = value.replace(/\s+/g, ' ').trim();
   return compact.length > 140 ? `${compact.slice(0, 140)}...` : compact;
+}
+
+function stringifyUnknown(value: unknown): string {
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (
+    typeof value === 'number' ||
+    typeof value === 'boolean' ||
+    value === null ||
+    value === undefined
+  ) {
+    return String(value);
+  }
+
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return '[unserializable value]';
+  }
 }
 
 async function validateStructuredQuizOutput(output: unknown): Promise<string> {
