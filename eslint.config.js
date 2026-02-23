@@ -11,10 +11,20 @@ export default tseslint.config(
       '*.json',
     ],
   },
-  js.configs.recommended,
-  ...tseslint.configs.recommendedTypeChecked,
+  {
+    files: ['**/*.js', '**/*.mjs'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: globals.node,
+    },
+    ...js.configs.recommended,
+  },
   {
     files: ['src/**/*.ts'],
+    extends: [
+      ...tseslint.configs.recommendedTypeChecked,
+    ],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',
