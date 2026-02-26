@@ -19,15 +19,23 @@ sphinx/
 │   │   ├── quiz.ts            # Interactive quiz runner
 │   │   ├── build.ts           # HTML generation
 │   │   ├── validate.ts        # Schema validation
-│   │   └── generate.ts        # AI quiz generation (uses Claude Agent SDK)
+│   │   ├── generate.ts        # AI quiz generation (uses Claude Agent SDK)
+│   │   └── generate-open.ts   # Multi-source "open" mode generation
 │   ├── core/                  # Core quiz logic
 │   │   ├── types.ts           # TypeScript interfaces (Quiz, Question, etc.)
 │   │   ├── parser.ts          # JSON parsing + Ajv schema validation
 │   │   ├── engine.ts          # QuizEngine - runs quizzes, scores answers
 │   │   ├── irt.ts             # IRTEngine - 2PL adaptive testing
 │   │   └── question-types.ts  # Scoring/validation per question type
-│   ├── generate/              # Quiz generation config
-│   │   └── config.ts          # Layered config: defaults → file → env → CLI
+│   ├── generate/              # Quiz generation
+│   │   ├── config.ts          # Layered config: defaults → file → env → CLI
+│   │   └── open/              # Multi-source open mode
+│   │       ├── types.ts       # Open mode interfaces
+│   │       ├── sources.ts     # Source parsing and validation
+│   │       ├── agents.ts      # Agent definitions (explorer, connection, synthesizer)
+│   │       ├── orchestrator.ts # Parallel agent coordination
+│   │       ├── notes.ts       # Notes validation and aggregation
+│   │       └── synthesize.ts  # Question selection and ranking
 │   ├── renderers/             # Output formatters
 │   │   ├── cli.ts             # Terminal output with ANSI colors
 │   │   └── html.ts            # Standalone HTML quiz builder
@@ -38,9 +46,11 @@ sphinx/
 │   └── schema/
 │       └── quiz.schema.json   # JSON Schema (draft-07)
 ├── skills/
-│   └── generate-quiz/         # Claude Code skill for generation
-│       ├── SKILL.md           # Skill definition
-│       └── sources/           # Source-specific instructions
+│   ├── generate-quiz/         # Single-source quiz generation skill
+│   │   ├── SKILL.md           # Skill definition
+│   │   └── sources/           # Source-specific instructions
+│   └── generate-quiz-open/    # Multi-source open mode skill
+│       └── SKILL.md           # Open mode skill definition
 ├── examples/                  # Sample quiz files
 └── docs/plans/                # Design documents
 ```
@@ -98,15 +108,73 @@ sphinx quiz <file> --ci      # CI mode (non-interactive)
 sphinx build <file>          # Generate HTML
 sphinx validate <file>       # Validate JSON
 sphinx generate git local .  # Generate quiz from repo
+sphinx generate github repo <url>  # Generate from GitHub repo
+sphinx generate open --source "github:owner/repo" --prompt "..." # Multi-source generation
 ```
 
 ## Generation Architecture
+
+### Single-Source Generation
 
 The `generate` command:
 1. Loads config from `~/.sphinx/config.json` → env vars → CLI flags
 2. Builds a prompt with source/focus/question count
 3. Invokes Claude Agent SDK with `outputFormat: { type: 'json_schema', schema: quizSchema }`
 4. Returns `structured_output` from result message
+
+### Multi-Source "Open" Mode
+
+The `generate open` command enables quiz generation from multiple heterogeneous sources:
+
+```bash
+sphinx generate open \
+  --source "github:owner/repo1" \
+  --source "url:https://docs.example.com" \
+  --prompt "Quiz about the combined architecture" \
+  -o quiz.json
+```
+
+**Architecture:**
+```
+┌─────────────────────────────────────┐
+│         Main Orchestrator           │
+│  (spawns agents, tracks progress)   │
+└─────────────────┬───────────────────┘
+                  │
+    ┌─────────────┼─────────────┐
+    ▼             ▼             ▼
+┌────────┐   ┌────────┐   ┌────────┐
+│Source 1│   │Source 2│   │Source N│   ← Explorer agents (parallel)
+│Explorer│   │Explorer│   │Explorer│
+└───┬────┘   └───┬────┘   └───┬────┘
+    │            │            │
+    ▼            ▼            ▼
+ notes/       notes/       notes/      ← JSON notes files
+    │            │            │
+    └────────────┼────────────┘
+                 ▼
+        ┌─────────────────┐
+        │Connection Finder│             ← Finds cross-source themes
+        └────────┬────────┘
+                 ▼
+        ┌─────────────────┐
+        │Quiz Synthesizer │             ← Generates final quiz
+        └─────────────────┘
+```
+
+**Supported source types:**
+- `github:owner/repo` - GitHub repository
+- `github:owner/repo/pull/123` - GitHub pull request
+- `url:https://...` - Web page
+- `confluence:https://...` - Confluence page
+- `notion:https://...` - Notion page
+- `file:/path/to/file` - Local file
+
+**Session artifacts** stored in `~/.sphinx/open-sessions/<session-id>/`:
+- `sources.json` - Input sources
+- `notes/source-N.json` - Explorer outputs
+- `connections.json` - Cross-source connections
+- `quiz.json` - Final quiz
 
 **Important**: Cannot run from within Claude Code (nested sessions unsupported). The SDK spawns Claude Code as subprocess.
 
@@ -159,9 +227,51 @@ Exit code 0 = passed, 1 = failed or error.
 | `SPHINX_DEBUG=1` | Enable debug logging |
 | `SPHINX_DEFAULT_MODEL` | Default model for generation |
 | `SPHINX_LLM_MODEL` | LLM model override |
-| `SPHINX_LLM_PROVIDER` | Provider (anthropic/openai) |
+| `SPHINX_LLM_PROVIDER` | Provider (anthropic/kimi/moonshot/ollama) |
+| `SPHINX_API_BASE` | Custom API base URL for alternative providers |
+| `SPHINX_OPEN_MAX_AGENTS` | Max concurrent agents for open mode |
+| `SPHINX_OPEN_MAX_ITERATIONS` | Max turns per agent in open mode |
 | `GITHUB_TOKEN` / `GH_TOKEN` | GitHub API access |
 | `ANTHROPIC_API_KEY` | Direct API access |
+| `KIMI_API_KEY` / `MOONSHOT_API_KEY` | Kimi/Moonshot API access |
+
+## Alternative LLM Providers
+
+Sphinx has configuration support for alternative Anthropic-compatible providers (Kimi K2.5, Ollama, etc.):
+
+```bash
+# Using Kimi (Moonshot AI)
+export KIMI_API_KEY="your-kimi-api-key"
+sphinx generate git local . --provider kimi
+
+# Using custom API base
+sphinx generate git local . --provider kimi --api-base https://api.moonshot.cn/v1
+
+# Using Ollama (local)
+sphinx generate git local . --provider ollama --api-base http://localhost:11434
+```
+
+Config file (`~/.sphinx/config.json`):
+```json
+{
+  "llm": {
+    "provider": "kimi",
+    "apiBase": "https://api.moonshot.cn/v1"
+  }
+}
+```
+
+**Current Limitations:**
+
+The `sphinx generate` command uses the Claude Agent SDK which relies on Claude-specific features:
+- **Structured Output** - The SDK's `outputFormat: { type: 'json_schema' }` requires Claude's native structured output support
+- **Internal Hooks** - The SDK uses Claude Code's hook system (e.g., StructuredOutput tool) that alternative providers don't implement
+- **Message Formats** - Some SDK message types are Claude-specific
+
+As a result, alternative providers may not work reliably with `sphinx generate`. The configuration is in place for future compatibility when:
+- Providers add structured output support matching Claude's format
+- Direct API integration bypasses the SDK for alternative providers
+- The SDK adds explicit multi-provider support
 
 ## Build & Run
 

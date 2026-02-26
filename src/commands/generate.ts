@@ -1,6 +1,15 @@
 import { Command } from 'commander';
 import { query } from '@anthropic-ai/claude-agent-sdk';
-import { loadConfig, profiles, type Profile, type Focus } from '../generate/config.js';
+import {
+  loadConfig,
+  profiles,
+  getEffectiveLLMConfig,
+  isAlternativeProvider,
+  type Profile,
+  type Focus,
+  type LLMProvider,
+} from '../generate/config.js';
+import { createGenerateOpenCommand } from './generate-open.js';
 
 export function createGenerateCommand(): Command {
   const generate = new Command('generate')
@@ -16,6 +25,8 @@ export function createGenerateCommand(): Command {
     .argument('<url>', 'GitHub repository URL')
     .option('--token <token>', 'GitHub token')
     .option('--model <model>', 'Model to use (overrides config default)')
+    .option('--provider <provider>', 'LLM provider: anthropic, kimi, moonshot, ollama', 'anthropic')
+    .option('--api-base <url>', 'Custom API base URL (for alternative providers)')
     .option('--focus <focus>', 'Quiz focus: comprehension, changes, practices, security, concepts', 'comprehension')
     .option('--profile <profile>', 'Question profile: quick, standard, thorough', 'standard')
     .option('--questions <n>', 'Override question count', parseInt)
@@ -76,6 +87,9 @@ export function createGenerateCommand(): Command {
     await runGenerate('confluence', 'page', url, options);
   });
 
+  // Open mode: multi-source generation
+  generate.addCommand(createGenerateOpenCommand());
+
   return generate;
 }
 
@@ -83,6 +97,8 @@ interface GenerateOptions {
   token?: string;
   base?: string;
   model?: string;
+  provider?: LLMProvider;
+  apiBase?: string;
   focus: Focus;
   profile: Profile;
   questions?: number;
@@ -96,9 +112,21 @@ async function runGenerate(
   target: string,
   options: GenerateOptions
 ): Promise<void> {
-  const config = await loadConfig();
-  const model = options.model || config.generate.defaultModel || config.llm.model;
+  // Merge CLI options into config
+  const baseConfig = await loadConfig();
 
+  // Apply CLI overrides for provider settings
+  if (options.provider) {
+    baseConfig.llm.provider = options.provider;
+  }
+  if (options.apiBase) {
+    baseConfig.llm.apiBase = options.apiBase;
+  }
+  if (options.model) {
+    baseConfig.llm.model = options.model;
+  }
+
+  const llmConfig = getEffectiveLLMConfig(baseConfig);
   const questionCount = options.questions || profiles[options.profile].questions;
 
   const prompt = buildPrompt(source, subtype, target, {
@@ -108,12 +136,13 @@ async function runGenerate(
 
   console.error(`Generating quiz from ${source} ${subtype}: ${target}`);
   console.error(`Focus: ${options.focus}, Questions: ${questionCount}`);
-  if (model) {
-    console.error(`Model: ${model}`);
+  console.error(`Provider: ${llmConfig.provider}, Model: ${llmConfig.model}`);
+  if (isAlternativeProvider(llmConfig.provider)) {
+    console.error(`API Base: ${llmConfig.apiBase}`);
   }
 
   try {
-    const result = await invokeSkill(prompt, config, model);
+    const result = await invokeSkill(prompt, baseConfig, llmConfig);
 
     if (options.output) {
       const { writeFile } = await import('fs/promises');
@@ -163,7 +192,7 @@ function buildPrompt(
 async function invokeSkill(
   prompt: string,
   _config: Awaited<ReturnType<typeof loadConfig>>,
-  model?: string
+  llmConfig: ReturnType<typeof getEffectiveLLMConfig>
 ): Promise<string> {
   // Check if running inside Claude Code (nested sessions not supported)
   if (process.env.CLAUDECODE === '1') {
@@ -175,6 +204,22 @@ async function invokeSkill(
       `  1. Run 'sphinx generate' from a regular terminal (outside Claude Code)\n` +
       `  2. Ask Claude Code directly to generate the quiz JSON for you`
     );
+  }
+
+  // Set up environment for alternative providers
+  const originalEnv: Record<string, string | undefined> = {};
+  if (isAlternativeProvider(llmConfig.provider)) {
+    // Save and set API base
+    originalEnv.ANTHROPIC_API_BASE = process.env.ANTHROPIC_API_BASE;
+    process.env.ANTHROPIC_API_BASE = llmConfig.apiBase;
+
+    // Set API key if provided (alternative providers may use ANTHROPIC_API_KEY)
+    if (llmConfig.apiKey && !process.env.ANTHROPIC_API_KEY) {
+      originalEnv.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+      process.env.ANTHROPIC_API_KEY = llmConfig.apiKey;
+    }
+
+    console.error(`Using ${llmConfig.provider} provider at ${llmConfig.apiBase}`);
   }
 
   const outputSchema = createAgentStructuredQuizSchema();
@@ -205,8 +250,10 @@ async function invokeSkill(
       },
     };
 
-    if (model) {
-      queryOptions.model = model;
+    // Set model (for alternative providers, this may be ignored by the SDK
+    // but we set it for completeness)
+    if (llmConfig.model) {
+      queryOptions.model = llmConfig.model;
     }
 
     for await (const message of query({
@@ -278,6 +325,15 @@ async function invokeSkill(
     }
 
     throw new Error(`SDK query failed: ${details}`, { cause: err });
+  } finally {
+    // Restore original environment variables
+    for (const [key, value] of Object.entries(originalEnv)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
   }
 }
 
@@ -370,6 +426,8 @@ function addStandardOptions(
 ): Command {
   return command
     .option('--model <model>', 'Model to use (overrides config default)')
+    .option('--provider <provider>', 'LLM provider: anthropic, kimi, moonshot, ollama', 'anthropic')
+    .option('--api-base <url>', 'Custom API base URL (for alternative providers)')
     .option('--focus <focus>', 'Quiz focus', defaults.focus)
     .option('--profile <profile>', 'Question profile', defaults.profile)
     .option('--questions <n>', 'Override question count', parseInt)

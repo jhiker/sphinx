@@ -1,0 +1,109 @@
+{
+  "version": "1.0",
+  "metadata": {
+    "id": "sphinx-comprehension-quiz",
+    "title": "Sphinx Quiz System Comprehension",
+    "description": "Test your understanding of the Sphinx quiz system architecture and concepts",
+    "tags": [
+      "sphinx",
+      "quiz-system",
+      "typescript",
+      "comprehension"
+    ],
+    "author": "Claude"
+  },
+  "config": {
+    "mode": "static",
+    "passingThreshold": 0.7,
+    "timeLimit": null,
+    "randomizeOrder": false,
+    "showCorrectAnswers": "after-completion",
+    "questionTypes": [
+      "multiple-choice",
+      "multi-select",
+      "free-text"
+    ],
+    "questionCount": 3
+  },
+  "questions": [
+    {
+      "id": "q1-quiz-modes",
+      "type": "multiple-choice",
+      "prompt": "What are the two quiz modes supported by the Sphinx quiz system?",
+      "difficulty": -1,
+      "discrimination": 1,
+      "category": "Architecture",
+      "options": [
+        {
+          "id": "a",
+          "text": "Static and Adaptive",
+          "correct": true
+        },
+        {
+          "id": "b",
+          "text": "Simple and Advanced",
+          "correct": false
+        },
+        {
+          "id": "c",
+          "text": "Basic and Expert",
+          "correct": false
+        },
+        {
+          "id": "d",
+          "text": "Manual and Automatic",
+          "correct": false
+        }
+      ],
+      "explanation": "Sphinx supports two quiz modes: 'static' for fixed question order quizzes, and 'adaptive' which uses Item Response Theory (IRT) to dynamically select questions based on the test-taker's estimated ability level (theta)."
+    },
+    {
+      "id": "q2-question-types",
+      "type": "multi-select",
+      "prompt": "Which of the following are valid question types in the Sphinx quiz system?",
+      "difficulty": 0,
+      "discrimination": 1.2,
+      "category": "Question Types",
+      "options": [
+        {
+          "id": "a",
+          "text": "multiple-choice",
+          "correct": true
+        },
+        {
+          "id": "b",
+          "text": "multi-select",
+          "correct": true
+        },
+        {
+          "id": "c",
+          "text": "true-false",
+          "correct": false
+        },
+        {
+          "id": "d",
+          "text": "code-challenge",
+          "correct": true
+        }
+      ],
+      "scoring": "partial",
+      "explanation": "Sphinx supports four question types: multiple-choice (single correct answer), multi-select (multiple correct answers with partial or all-or-nothing scoring), free-text (text input with exact/contains/regex matching), and code-challenge (programming problems with test cases). True-false is not a distinct type - it would be implemented as a multiple-choice question."
+    },
+    {
+      "id": "q3-partial-scoring",
+      "type": "free-text",
+      "prompt": "In multi-select questions with partial scoring, what is the formula used to calculate the score? Express your answer in terms of correct selections, incorrect selections, and total correct options.",
+      "difficulty": 1.5,
+      "discrimination": 1.5,
+      "category": "Scoring Logic",
+      "acceptedAnswers": [
+        "(correct - incorrect) / total",
+        "correct selections - incorrect selections / total correct",
+        "(correctSelections - incorrectSelections) / totalCorrect"
+      ],
+      "matchMode": "contains",
+      "caseSensitive": false,
+      "explanation": "For multi-select questions with partial scoring, the score is calculated as: (correct selections - incorrect selections) / total correct options. The minimum score is 0, so negative results are clamped. A score of 1 (100%) means all correct options were selected with no incorrect selections."
+    }
+  ]
+}

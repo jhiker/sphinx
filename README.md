@@ -95,8 +95,71 @@ Model precedence:
 Environment variables:
 - `SPHINX_DEFAULT_MODEL`
 - `SPHINX_LLM_MODEL`
+- `SPHINX_LLM_PROVIDER` - Provider: anthropic, kimi, moonshot, ollama
+- `SPHINX_API_BASE` - Custom API base URL
+
+### Alternative Providers (Kimi, Ollama) - Experimental
+
+Sphinx has configuration support for alternative Anthropic-compatible providers:
+
+```bash
+# Using Kimi (Moonshot AI)
+export KIMI_API_KEY="your-kimi-api-key"
+sphinx generate git local . --provider kimi
+
+# Using Ollama (local)
+sphinx generate git local . --provider ollama --api-base http://localhost:11434
+```
+
+Supported providers:
+- `anthropic` (default) - Anthropic Claude API
+- `kimi` / `moonshot` - Moonshot AI Kimi K2.5
+- `ollama` - Local Ollama instance
+
+> **Note:** Alternative providers have limited compatibility. The `generate` command uses the Claude Agent SDK which relies on Claude-specific features (structured output, internal hooks). Alternative providers may not work reliably until they support these features or direct API integration is added.
 
 `generate` uses structured output (`json_schema`) and validates quiz JSON against the project schema.
+
+### Multi-Source Generation (Open Mode)
+
+Generate quizzes that span multiple heterogeneous sources:
+
+```bash
+# Multiple sources via repeated --source flag
+sphinx generate open \
+  --source "github:anthropics/claude-agent-sdk" \
+  --source "url:https://docs.anthropic.com/claude-code" \
+  --source "confluence:https://company.atlassian.net/wiki/pages/123" \
+  --prompt "Quiz about building autonomous agents with Claude" \
+  -o quiz.json
+
+# Load sources from file
+sphinx generate open \
+  --sources-file sources.json \
+  --prompt "Distributed systems architecture quiz"
+
+# Preview without running
+sphinx generate open \
+  --source "github:owner/repo" \
+  --prompt "test" \
+  --dry-run
+```
+
+**Supported source types:**
+- `github:owner/repo` - GitHub repository
+- `github:owner/repo/pull/123` - GitHub pull request
+- `url:https://...` - Web page (via WebFetch)
+- `confluence:https://...` - Confluence page
+- `notion:https://...` - Notion page
+- `file:/path/to/file` - Local file
+
+**Options:**
+- `--max-agents <n>` - Max concurrent explorer agents (default: 4)
+- `--max-iterations <n>` - Max turns per agent (default: 15)
+- `--explorer-model <model>` - Model for exploration (default: sonnet)
+- `--synthesizer-model <model>` - Model for synthesis (default: opus)
+
+Open mode uses parallel agents to explore each source, finds cross-source connections, and synthesizes questions that test understanding across all sources.
 
 ### CI Mode
 
