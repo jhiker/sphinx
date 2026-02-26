@@ -1,6 +1,8 @@
 import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { homedir } from 'os';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 
 export type LLMProvider = 'anthropic' | 'openai' | 'kimi' | 'moonshot' | 'ollama';
 
@@ -69,6 +71,14 @@ export async function loadConfig(cliOptions: Partial<GenerateConfig> = {}): Prom
   const envConfig = loadEnvConfig();
   config = mergeConfig(config, envConfig);
 
+  // Fallback: GitHub CLI auth token (only if no token already configured)
+  if (!config.github.token) {
+    const ghToken = await loadGitHubCliToken();
+    if (ghToken) {
+      config = mergeConfig(config, { github: { token: ghToken } });
+    }
+  }
+
   // Layer 3: CLI options (highest priority)
   config = mergeConfig(config, cliOptions);
 
@@ -129,6 +139,23 @@ function loadEnvConfig(): Partial<GenerateConfig> {
   }
 
   return config;
+}
+
+async function loadGitHubCliToken(): Promise<string | undefined> {
+  const execFileAsync = promisify(execFile);
+
+  try {
+    const { stdout } = await execFileAsync('gh', ['auth', 'token'], {
+      timeout: 2_000,
+      windowsHide: true,
+    });
+
+    const token = stdout.trim();
+    return token || undefined;
+  } catch {
+    // Ignore missing gh binary, auth failures, or timeouts.
+    return undefined;
+  }
 }
 
 function mergeConfig(base: GenerateConfig, override: Partial<GenerateConfig>): GenerateConfig {
