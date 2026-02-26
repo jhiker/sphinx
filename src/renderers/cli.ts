@@ -101,6 +101,7 @@ export class CLIRenderer {
     }
 
     console.log(this.dim(`[${getQuestionTypeName(question.type)}]`));
+    console.log(this.dim(this.formatDifficultyIndicator(question.difficulty)));
     console.log();
 
     console.log(this.bold(question.prompt));
@@ -220,6 +221,38 @@ export class CLIRenderer {
       }
     }
 
+    if (result.passed) {
+      const explanationQuestions = result.questionResults
+        .map((qr) => {
+          const question = quiz.questions.find((q) => q.id === qr.questionId);
+          return question ? { question, result: qr } : null;
+        })
+        .filter((item): item is { question: Question; result: QuestionResult } => Boolean(item));
+
+      if (explanationQuestions.length > 0) {
+        console.log();
+        console.log(this.bold('Question Explanations:'));
+
+        for (const { question, result: qr } of explanationQuestions) {
+          console.log();
+          const icon = qr.correct ? this.green('✓') : this.yellow('•');
+          console.log(`${icon} ${this.bold(question.prompt)}`);
+          console.log(this.dim(`  ${this.formatDifficultyIndicator(question.difficulty)}`));
+
+          const correctAnswers = getCorrectAnswers(question);
+          if (correctAnswers.length > 0) {
+            console.log(this.dim(`  Correct: ${correctAnswers.join(', ')}`));
+          }
+
+          if (question.explanation) {
+            console.log(this.dim(`  Explanation: ${question.explanation}`));
+          } else {
+            console.log(this.dim('  Explanation: (none provided)'));
+          }
+        }
+      }
+    }
+
     console.log();
     console.log(this.bold('─'.repeat(60)));
     console.log();
@@ -250,6 +283,24 @@ export class CLIRenderer {
     if (theta >= 0.0) return this.yellow('Intermediate');
     if (theta >= -1.0) return this.yellow('Basic');
     return this.red('Novice');
+  }
+
+  private formatDifficultyIndicator(difficulty: number): string {
+    const safeDifficulty = Number.isFinite(difficulty) ? difficulty : 0;
+    const clamped = Math.max(-3, Math.min(3, safeDifficulty));
+    const normalized = (clamped + 3) / 6;
+    const width = 18;
+    const markerIndex = Math.max(0, Math.min(width - 1, Math.round(normalized * (width - 1))));
+    const bar = Array.from({ length: width }, (_, i) => (i === markerIndex ? '◆' : '─')).join('');
+
+    let label = 'Medium';
+    if (normalized < 0.15) label = 'Very Easy';
+    else if (normalized < 0.35) label = 'Easy';
+    else if (normalized < 0.65) label = 'Medium';
+    else if (normalized < 0.85) label = 'Hard';
+    else label = 'Very Hard';
+
+    return `Difficulty: [${bar}] ${label} (${safeDifficulty.toFixed(1)})`;
   }
 
   renderError(message: string): void {
