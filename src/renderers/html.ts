@@ -122,6 +122,53 @@ function getStyles(): string {
       margin-bottom: 10px;
     }
 
+    .question-meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+
+    .difficulty-badge {
+      display: grid;
+      grid-template-columns: auto minmax(120px, 180px) auto;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: #f7fafc;
+      color: #46576a;
+      font-size: 12px;
+      border: 1px solid #dde5ec;
+    }
+
+    .difficulty-track {
+      position: relative;
+      height: 8px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #38c172 0%, #f4d03f 50%, #e74c3c 100%);
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08);
+    }
+
+    .difficulty-thumb {
+      position: absolute;
+      top: 50%;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #1f2d3d;
+      border: 2px solid white;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+      transform: translate(-50%, -50%);
+    }
+
+    .difficulty-label {
+      font-weight: 600;
+      color: #2c3e50;
+      white-space: nowrap;
+    }
+
     .question-prompt {
       font-size: 18px;
       font-weight: 500;
@@ -314,6 +361,52 @@ function getStyles(): string {
       color: #2c3e50;
     }
 
+    .review-list {
+      margin-top: 24px;
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .review-item {
+      border: 1px solid #e6ebf0;
+      border-radius: 8px;
+      padding: 14px;
+      background: #fafbfd;
+    }
+
+    .review-item h3 {
+      font-size: 15px;
+      margin-bottom: 8px;
+      color: #2c3e50;
+    }
+
+    .review-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-size: 12px;
+      color: #687684;
+    }
+
+    .review-correct {
+      color: #1f8f52;
+      font-weight: 600;
+    }
+
+    .review-answer {
+      font-size: 13px;
+      color: #5f6d7a;
+      margin-bottom: 6px;
+    }
+
+    .review-explanation {
+      font-size: 14px;
+      color: #44515d;
+    }
+
     @media (max-width: 600px) {
       #app {
         padding: 10px;
@@ -371,6 +464,24 @@ function getQuizScript(): string {
 
       getCurrentQuestion() {
         return this.questions[this.currentIndex];
+      }
+
+      getDifficultyDisplay(difficulty) {
+        const safeDifficulty = typeof difficulty === 'number' ? difficulty : 0;
+        const clamped = Math.max(-3, Math.min(3, safeDifficulty));
+        const normalized = (clamped + 3) / 6;
+        const level = Math.max(1, Math.min(5, Math.round(normalized * 4) + 1));
+        let label = 'Medium';
+        if (level <= 1) label = 'Very Easy';
+        else if (level === 2) label = 'Easy';
+        else if (level === 4) label = 'Hard';
+        else if (level >= 5) label = 'Very Hard';
+
+        return {
+          label,
+          raw: safeDifficulty,
+          positionPct: (normalized * 100).toFixed(1),
+        };
       }
 
       submitAnswer(answer) {
@@ -523,6 +634,7 @@ function getQuizScript(): string {
       renderQuestion() {
         const question = this.getCurrentQuestion();
         const progress = ((this.currentIndex + 1) / this.questions.length) * 100;
+        const difficulty = this.getDifficultyDisplay(question.difficulty);
 
         return \`
           <div class="question-card">
@@ -530,6 +642,15 @@ function getQuizScript(): string {
               <div class="progress-fill" style="width: \${progress}%"></div>
             </div>
             <div class="question-number">Question \${this.currentIndex + 1} of \${this.questions.length}</div>
+            <div class="question-meta">
+              <div class="difficulty-badge" title="Difficulty \${difficulty.raw.toFixed(1)}">
+                <span>Difficulty</span>
+                <span class="difficulty-track" aria-hidden="true">
+                  <span class="difficulty-thumb" style="left: \${difficulty.positionPct}%"></span>
+                </span>
+                <span class="difficulty-label">\${difficulty.label} (\${difficulty.raw.toFixed(1)})</span>
+              </div>
+            </div>
             <div class="question-prompt">\${this.escapeHtml(question.prompt)}</div>
             \${question.context ? \`<div class="question-context">\${this.escapeHtml(question.context)}</div>\` : ''}
             \${this.renderOptions(question)}
@@ -686,14 +807,48 @@ function getQuizScript(): string {
                 <div class="stat-value">\${(this.quiz.config.passingThreshold * 100).toFixed(0)}%</div>
               </div>
             </div>
+            \${results.passed ? this.renderPassedExplanations() : ''}
             <button id="restart-btn" class="btn btn-primary">Try Again</button>
+          </div>
+        \`;
+      }
+
+      renderPassedExplanations() {
+        const reviewItems = this.questions.map((question, index) => {
+          const result = this.results.find(r => r.questionId === question.id);
+          const difficulty = this.getDifficultyDisplay(question.difficulty);
+          const correctAnswers = this.getCorrectAnswers(question).join(', ');
+          const explanation = question.explanation || '(No explanation provided)';
+
+          return \`
+            <div class="review-item">
+              <h3>Q\${index + 1}. \${this.escapeHtml(question.prompt)}</h3>
+              <div class="review-meta">
+                <span class="\${result?.correct ? 'review-correct' : ''}">\${result?.correct ? 'Correct' : 'Review'}</span>
+                <span>Difficulty: \${difficulty.label} (\${difficulty.raw.toFixed(1)})</span>
+                <span style="display:inline-flex; align-items:center; gap:6px;">
+                  <span class="difficulty-track" style="width:100px;" aria-hidden="true">
+                    <span class="difficulty-thumb" style="left: \${difficulty.positionPct}%"></span>
+                  </span>
+                </span>
+              </div>
+              \${correctAnswers ? \`<div class="review-answer">Correct answer: \${this.escapeHtml(correctAnswers)}</div>\` : ''}
+              <div class="review-explanation">\${this.escapeHtml(explanation)}</div>
+            </div>
+          \`;
+        }).join('');
+
+        return \`
+          <div class="review-list">
+            <h3>Question Explanations</h3>
+            \${reviewItems}
           </div>
         \`;
       }
 
       escapeHtml(text) {
         const div = document.createElement('div');
-        div.textContent = text;
+        div.textContent = String(text);
         return div.innerHTML;
       }
     }
