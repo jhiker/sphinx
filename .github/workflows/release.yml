@@ -2,15 +2,6 @@ name: Prepare Release
 
 on:
   workflow_dispatch:
-    inputs:
-      release_type:
-        description: Semver bump to apply
-        required: true
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
 
 concurrency:
   group: prepare-release
@@ -45,27 +36,28 @@ jobs:
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
 
-      - name: Bump version
+      - name: Read release version
         id: version
         run: |
-          NEW_VERSION=$(npm version "${{ inputs.release_type }}" --no-git-tag-version)
-          echo "new_version=${NEW_VERSION}" >> "$GITHUB_OUTPUT"
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
 
-      - name: Commit version bump
+      - name: Verify tag does not already exist
         run: |
-          git add package.json package-lock.json
-          git commit -m "chore: release ${{ steps.version.outputs.new_version }}"
+          if git rev-parse "${{ steps.version.outputs.tag }}" >/dev/null 2>&1; then
+            echo "Tag ${{ steps.version.outputs.tag }} already exists"
+            exit 1
+          fi
 
-      - name: Create tag
-        run: git tag "${{ steps.version.outputs.new_version }}"
-
-      - name: Push commit and tag
+      - name: Create and push tag
         run: |
-          git push origin HEAD:${GITHUB_REF_NAME}
-          git push origin "${{ steps.version.outputs.new_version }}"
+          git tag "${{ steps.version.outputs.tag }}"
+          git push origin "${{ steps.version.outputs.tag }}"
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.version.outputs.new_version }}
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
           generate_release_notes: true
