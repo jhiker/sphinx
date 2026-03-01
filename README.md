@@ -7,6 +7,12 @@ The idea is to explore a pattern for challenging humans who want to stay in the 
 ## Installation
 
 ```bash
+npm install -g sphinx-cli
+```
+
+### From source
+```bash
+# First clone this repo and then ->
 npm install
 npm run build
 npm link # to set up sphinx cli

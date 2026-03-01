@@ -1,14 +1,29 @@
 {
-  "name": "sphinx",
+  "name": "sphinx-cli",
   "version": "1.0.0",
   "description": "JSON-based quiz system for measuring technical competence",
   "type": "module",
   "main": "dist/cli.js",
+  "files": [
+    "dist/",
+    "README.md"
+  ],
   "bin": {
     "sphinx": "dist/cli.js"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jhiker/sphinx.git"
+  },
+  "homepage": "https://github.com/jhiker/sphinx#readme",
+  "bugs": {
+    "url": "https://github.com/jhiker/sphinx/issues"
+  },
+  "publishConfig": {
+    "provenance": true
+  },
   "scripts": {
-    "build": "tsc && cp -r src/schema dist/ && cp -r templates dist/ && cp -r skills dist/",
+    "build": "rm -rf dist && tsc && cp -r src/schema dist/ && cp -r templates dist/ && cp -r skills dist/",
     "dev": "tsc --watch",
     "start": "node dist/cli.js",
     "test": "node --test $(find dist -name '*.test.js' -type f)",
