@@ -5,7 +5,7 @@ NPM ?= npm
 NODE ?= node
 TSC ?= npx tsc
 
-.PHONY: help install build rebuild clean dev lint typecheck test validate-examples check ci run-sample
+.PHONY: help install build rebuild clean dev lint typecheck test validate-examples check ci run-sample bump-patch bump-minor bump-major
 
 help: ## Show available targets
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -43,3 +43,12 @@ ci: install check ## CI entrypoint
 
 run-sample: build ## Run the sample quiz interactively
 	$(NODE) dist/cli.js quiz examples/sample-quiz.json
+
+bump-patch: ## Bump patch version in package manifests
+	$(NPM) version patch --no-git-tag-version
+
+bump-minor: ## Bump minor version in package manifests
+	$(NPM) version minor --no-git-tag-version
+
+bump-major: ## Bump major version in package manifests
+	$(NPM) version major --no-git-tag-version
